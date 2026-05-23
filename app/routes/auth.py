@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import InviteCode, User
+from app.db.models import InviteCode, Profile, User
 from app.db.session import get_db
 from app.services.auth import create_token, hash_password, verify_password
 
@@ -48,6 +48,8 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         password_hash=hash_password(body.password),
     )
     db.add(user)
+    profile = Profile(user_id=user_id, cuisine_prefs=[], spicy=2, dislikes=[])
+    db.add(profile)
     try:
         db.commit()
     except IntegrityError:
