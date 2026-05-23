@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -132,3 +132,56 @@ def recommend(
     payload = {"known": known, "new": new_dishes, "warning": warning}
     recommend_cache.set(cache_key, payload)
     return payload
+
+
+class GeminiDishPayload(BaseModel):
+    name: str
+    category: str | None = None
+    cuisine: str | None = None
+    spicy: int = 0
+    main_ingredients: list[str] = Field(default_factory=list)
+
+
+class LogIn(BaseModel):
+    dish_id: int | None = None
+    gemini_dish: GeminiDishPayload | None = None
+    meal_type: str = Field(pattern="^(breakfast|lunch|dinner)$")
+    add_to_library: bool = False
+
+
+@router.post("/log")
+def log_dish(body: LogIn, db: Session = Depends(get_db)):
+    if body.dish_id is None and body.gemini_dish is None:
+        raise HTTPException(status_code=400, detail="dish_id or gemini_dish required")
+
+    if body.dish_id is not None:
+        dish = db.get(Dish, body.dish_id)
+        if dish is None:
+            raise HTTPException(status_code=404, detail="Dish not found")
+        dish.cook_count += 1
+    else:
+        g = body.gemini_dish
+        existing = db.scalar(select(Dish).where(Dish.name == g.name))
+        if existing:
+            dish = existing
+            if body.add_to_library and dish.source != "user_known":
+                dish.source = "user_known"
+            dish.cook_count += 1
+        else:
+            dish = Dish(
+                name=g.name,
+                category=g.category,
+                cuisine=g.cuisine,
+                main_ingredients=g.main_ingredients,
+                spicy=g.spicy,
+                tags=[],
+                source="user_known" if body.add_to_library else "gemini_suggested",
+                cook_count=1,
+                needs_review=False,
+            )
+            db.add(dish)
+            db.flush()
+
+    db.add(CookingLog(dish_id=dish.id, meal_type=body.meal_type))
+    db.commit()
+    return {"ok": True, "dish_id": dish.id, "cook_count": dish.cook_count}
