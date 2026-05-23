@@ -1,0 +1,65 @@
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem;
+  background: #fafafa;
+  color: #222;
+}
+header h1 { margin: 0 0 1rem; }
+nav { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+nav button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+  border-radius: 4px;
+}
+nav button.active { background: #2563eb; color: white; border-color: #2563eb; }
+
+.meal-picker { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.meal-picker button {
+  flex: 1;
+  padding: 0.75rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.card {
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.card.new { border-left: 4px solid #f59e0b; }
+.card h3 { margin: 0 0 0.25rem; }
+.card .ings { color: #555; font-size: 0.9em; margin: 0.25rem 0; }
+.card .why { color: #555; font-style: italic; margin: 0.5rem 0; }
+.card button {
+  margin-right: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #2563eb;
+  background: white;
+  color: #2563eb;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.warning { background: #fef3c7; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.5rem 0; }
+.error   { background: #fee2e2; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.5rem 0; }
+
+form { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+form input { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+form button { padding: 0.5rem 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+textarea { width: 100%; min-height: 100px; padding: 0.5rem; }
+.dish-list { list-style: none; padding: 0; }
+.dish-list li { padding: 0.5rem; background: white; margin-bottom: 0.25rem; border-radius: 4px; }
+.dish-list .review { color: #f59e0b; }
+.dish-list .count { float: right; color: #888; }
+
+label { display: block; margin: 0.5rem 0; }
+label input { display: block; width: 100%; padding: 0.4rem; }
