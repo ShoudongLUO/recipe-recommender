@@ -14,6 +14,8 @@ class Settings:
     gemini_model: str
     database_url: str
     daily_gemini_quota: int
+    jwt_secret: str
+    bcrypt_rounds: int
 
 
 def load_settings() -> Settings:
@@ -22,6 +24,8 @@ def load_settings() -> Settings:
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./data.db"),
         daily_gemini_quota=int(os.getenv("DAILY_GEMINI_QUOTA", "100")),
+        jwt_secret=os.getenv("JWT_SECRET", ""),
+        bcrypt_rounds=int(os.getenv("BCRYPT_ROUNDS", "12")),
     )
 
 
