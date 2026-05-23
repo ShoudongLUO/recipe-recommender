@@ -6,12 +6,13 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import dishes, ingredients, profile, recommend
+from app.routes import auth, dishes, ingredients, profile, recommend
 from app.services.gemini import build_gemini_client
 
 app = FastAPI(title="Recipe Recommender")
 app.state.gemini = build_gemini_client()
 
+app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(ingredients.router)
 app.include_router(dishes.router)

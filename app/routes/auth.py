@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.db.models import InviteCode, User
+from app.db.session import get_db
+from app.services.auth import create_token, hash_password
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+class RegisterIn(BaseModel):
+    username: str = Field(min_length=3, max_length=20, pattern=r"^[a-z0-9_]+$")
+    password: str = Field(min_length=8, max_length=72)
+    invite_code: str = Field(min_length=12, max_length=12)
+
+
+class TokenOut(BaseModel):
+    token: str
+    username: str
+
+
+@router.post("/register", response_model=TokenOut)
+def register(body: RegisterIn, db: Session = Depends(get_db)):
+    user_id = uuid4()
+
+    # Atomically consume invite code
+    stmt = (
+        update(InviteCode)
+        .where(InviteCode.code == body.invite_code, InviteCode.used_at.is_(None))
+        .values(used_at=datetime.utcnow(), used_by_user_id=user_id)
+    )
+    result = db.execute(stmt)
+    if result.rowcount == 0:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="邀请码无效或已使用")
+
+    user = User(
+        id=user_id,
+        username=body.username,
+        password_hash=hash_password(body.password),
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="用户名已存在")
+
+    token = create_token(user_id=user.id, username=user.username)
+    return TokenOut(token=token, username=user.username)
