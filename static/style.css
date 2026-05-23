@@ -63,3 +63,110 @@ textarea { width: 100%; min-height: 100px; padding: 0.5rem; }
 
 label { display: block; margin: 0.5rem 0; }
 label input { display: block; width: 100%; padding: 0.4rem; }
+
+/* === Auth view === */
+.center-msg {
+  text-align: center;
+  padding: 4rem 1rem;
+  color: #666;
+}
+
+.auth-card {
+  max-width: 360px;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.auth-card h1 {
+  margin: 0 0 1rem;
+  text-align: center;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.auth-tabs button {
+  flex: 1;
+  padding: 0.5rem;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.auth-tabs button.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9em;
+  color: #555;
+}
+
+.auth-card label input {
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1em;
+}
+
+.auth-card button[type="submit"] {
+  padding: 0.6rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1em;
+  cursor: pointer;
+}
+
+.auth-card button[type="submit"]:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* === Top bar (logged-in) === */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.topbar h1 {
+  margin: 0;
+}
+
+.user-area {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95em;
+  color: #555;
+}
+
+.user-area button {
+  padding: 0.3rem 0.75rem;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
