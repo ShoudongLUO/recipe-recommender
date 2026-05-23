@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.db.init import init_db
 from app.routes import dishes, ingredients, profile, recommend
 from app.services.gemini import build_gemini_client
 
@@ -25,8 +24,3 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
-
-
-@app.on_event("startup")
-def _startup():
-    init_db()
