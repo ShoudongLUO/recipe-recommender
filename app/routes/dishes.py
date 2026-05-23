@@ -5,8 +5,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Dish
+from app.db.models import Dish, User
 from app.db.session import get_db
+from app.services.auth import current_user
 from app.services.gemini import GeminiClient, GeminiParseError, GeminiUnavailable
 
 router = APIRouter(prefix="/api/dishes", tags=["dishes"])
@@ -42,8 +43,10 @@ def get_gemini(request: Request) -> GeminiClient:
 
 
 @router.get("", response_model=list[DishOut])
-def list_dishes(db: Session = Depends(get_db)):
-    rows = db.scalars(select(Dish).order_by(Dish.created_at.desc())).all()
+def list_dishes(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rows = db.scalars(
+        select(Dish).where(Dish.user_id == user.id).order_by(Dish.created_at.desc())
+    ).all()
     return [_to_out(d) for d in rows]
 
 
@@ -51,9 +54,12 @@ def list_dishes(db: Session = Depends(get_db)):
 def add_dish(
     body: DishIn,
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
     gemini: GeminiClient = Depends(get_gemini),
 ):
-    existing = db.scalar(select(Dish).where(Dish.name == body.name))
+    existing = db.scalar(
+        select(Dish).where(Dish.user_id == user.id, Dish.name == body.name)
+    )
     if existing:
         raise HTTPException(status_code=409, detail="Dish already exists")
 
@@ -65,6 +71,7 @@ def add_dish(
         needs_review = True
 
     d = Dish(
+        user_id=user.id,
         name=body.name,
         category=classified.get("category"),
         cuisine=classified.get("cuisine"),
