@@ -44,7 +44,13 @@ def fake_gemini(fake_transport) -> GeminiClient:
 
 @pytest.fixture()
 def db_session() -> Iterator[Session]:
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    from sqlalchemy.pool import StaticPool
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     db = TestSession()
