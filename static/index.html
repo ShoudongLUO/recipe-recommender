@@ -9,81 +9,110 @@
 </head>
 <body>
   <div id="app">
-    <header><h1>今天吃什么</h1></header>
+    <!-- LOADING (initial token check) -->
+    <div v-if="view === 'loading'" class="center-msg">加载中…</div>
 
-    <nav>
-      <button :class="{ active: tab==='home' }" @click="tab='home'">推荐</button>
-      <button :class="{ active: tab==='dishes' }" @click="tab='dishes'">会的菜</button>
-      <button :class="{ active: tab==='ingredients' }" @click="tab='ingredients'">本周食材</button>
-      <button :class="{ active: tab==='profile' }" @click="tab='profile'">口味画像</button>
-    </nav>
+    <!-- LOGIN / REGISTER -->
+    <div v-if="view === 'login'" class="auth-card">
+      <h1>今天吃什么</h1>
+      <div class="auth-tabs">
+        <button :class="{ active: authMode === 'login' }" @click="authMode='login'; authError=''">登录</button>
+        <button :class="{ active: authMode === 'register' }" @click="authMode='register'; authError=''">注册</button>
+      </div>
 
-    <main>
-      <section v-if="tab==='home'">
-        <div class="meal-picker">
-          <button v-for="m in ['breakfast','lunch','dinner']"
-                  :key="m" @click="recommend(m)">{{ mealLabel(m) }}</button>
+      <form @submit.prevent="submitAuth">
+        <label>用户名 <input v-model="authForm.username" placeholder="3-20 字符 a-z 0-9 _" required /></label>
+        <label>密码 <input v-model="authForm.password" type="password" placeholder="≥ 8 字符" required /></label>
+        <label v-if="authMode === 'register'">邀请码 <input v-model="authForm.invite_code" placeholder="12 字符" required /></label>
+        <button type="submit" :disabled="authBusy">{{ authBusy ? '提交中…' : (authMode === 'login' ? '登录' : '注册') }}</button>
+        <p v-if="authError" class="error">{{ authError }}</p>
+      </form>
+    </div>
+
+    <!-- MAIN APP -->
+    <div v-if="view === 'main'">
+      <header class="topbar">
+        <h1>今天吃什么</h1>
+        <div class="user-area">
+          <span>👤 {{ auth.username }}</span>
+          <button @click="logout">登出</button>
         </div>
-        <p v-if="loading">推荐中…</p>
-        <div v-if="result.warning" class="warning">{{ result.warning }}</div>
-        <div v-if="result.error" class="error">还没录入本周食材，先去录吧。</div>
+      </header>
 
-        <div v-if="result.known && result.known.length">
-          <h2>会做的菜</h2>
-          <article v-for="d in result.known" :key="'k'+d.id" class="card">
-            <h3>{{ d.name }}</h3>
-            <p>{{ d.cuisine }} · 辣度 {{ d.spicy }}</p>
-            <p class="ings">{{ (d.main_ingredients || []).join('、') }}</p>
-            <button @click="logKnown(d)">做这道</button>
-          </article>
-        </div>
+      <nav>
+        <button :class="{ active: tab==='home' }" @click="tab='home'">推荐</button>
+        <button :class="{ active: tab==='dishes' }" @click="tab='dishes'">会的菜</button>
+        <button :class="{ active: tab==='ingredients' }" @click="tab='ingredients'">本周食材</button>
+        <button :class="{ active: tab==='profile' }" @click="tab='profile'">口味画像</button>
+      </nav>
 
-        <div v-if="result.new && result.new.length">
-          <h2>可以试试</h2>
-          <article v-for="(d,i) in result.new" :key="'n'+i" class="card new">
-            <h3>{{ d.name }}</h3>
-            <p>{{ d.cuisine }} · 辣度 {{ d.spicy }}</p>
-            <p class="ings">{{ (d.main_ingredients || []).join('、') }}</p>
-            <p class="why">{{ d.why_recommended }}</p>
-            <button @click="logNew(d, true)">做这道并加入菜库</button>
-            <button @click="logNew(d, false)">做这道（先不加入）</button>
-          </article>
-        </div>
-      </section>
+      <main>
+        <section v-if="tab==='home'">
+          <div class="meal-picker">
+            <button v-for="m in ['breakfast','lunch','dinner']"
+                    :key="m" @click="recommend(m)">{{ mealLabel(m) }}</button>
+          </div>
+          <p v-if="loading">推荐中…</p>
+          <div v-if="result.warning" class="warning">{{ result.warning }}</div>
+          <div v-if="result.error" class="error">还没录入本周食材，先去录吧。</div>
 
-      <section v-if="tab==='dishes'">
-        <form @submit.prevent="addDish">
-          <input v-model="newDishName" placeholder="菜名，如 番茄炒蛋" required />
-          <button>添加</button>
-        </form>
-        <p v-if="addError" class="error">{{ addError }}</p>
-        <ul class="dish-list">
-          <li v-for="d in dishes" :key="d.id">
-            <strong :class="{ review: d.needs_review }">{{ d.name }}</strong>
-            <span v-if="d.cuisine">· {{ d.cuisine }}</span>
-            <span v-if="d.main_ingredients.length">· {{ d.main_ingredients.join('、') }}</span>
-            <span class="count">做过 {{ d.cook_count }} 次</span>
-          </li>
-        </ul>
-      </section>
+          <div v-if="result.known && result.known.length">
+            <h2>会做的菜</h2>
+            <article v-for="d in result.known" :key="'k'+d.id" class="card">
+              <h3>{{ d.name }}</h3>
+              <p>{{ d.cuisine }} · 辣度 {{ d.spicy }}</p>
+              <p class="ings">{{ (d.main_ingredients || []).join('、') }}</p>
+              <button @click="logKnown(d)">做这道</button>
+            </article>
+          </div>
 
-      <section v-if="tab==='ingredients'">
-        <textarea v-model="ingredientsText"
-                  placeholder="逗号分隔，如：番茄, 鸡蛋, 猪肉, 青菜"></textarea>
-        <button @click="saveIngredients">保存本周食材</button>
-        <p v-if="ingredientsSaved">已保存</p>
-      </section>
+          <div v-if="result.new && result.new.length">
+            <h2>可以试试</h2>
+            <article v-for="(d,i) in result.new" :key="'n'+i" class="card new">
+              <h3>{{ d.name }}</h3>
+              <p>{{ d.cuisine }} · 辣度 {{ d.spicy }}</p>
+              <p class="ings">{{ (d.main_ingredients || []).join('、') }}</p>
+              <p class="why">{{ d.why_recommended }}</p>
+              <button @click="logNew(d, true)">做这道并加入菜库</button>
+              <button @click="logNew(d, false)">做这道（先不加入）</button>
+            </article>
+          </div>
+        </section>
 
-      <section v-if="tab==='profile'">
-        <label>偏爱菜系（逗号分隔）<input v-model="profileText.cuisine" /></label>
-        <label>辣度 0-5
-          <input type="number" min="0" max="5" v-model.number="profile.spicy" />
-        </label>
-        <label>忌口（逗号分隔）<input v-model="profileText.dislikes" /></label>
-        <button @click="saveProfile">保存</button>
-        <p v-if="profileSaved">已保存</p>
-      </section>
-    </main>
+        <section v-if="tab==='dishes'">
+          <form @submit.prevent="addDish">
+            <input v-model="newDishName" placeholder="菜名，如 番茄炒蛋" required />
+            <button>添加</button>
+          </form>
+          <p v-if="addError" class="error">{{ addError }}</p>
+          <ul class="dish-list">
+            <li v-for="d in dishes" :key="d.id">
+              <strong :class="{ review: d.needs_review }">{{ d.name }}</strong>
+              <span v-if="d.cuisine">· {{ d.cuisine }}</span>
+              <span v-if="d.main_ingredients.length">· {{ d.main_ingredients.join('、') }}</span>
+              <span class="count">做过 {{ d.cook_count }} 次</span>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="tab==='ingredients'">
+          <textarea v-model="ingredientsText"
+                    placeholder="逗号分隔，如：番茄, 鸡蛋, 猪肉, 青菜"></textarea>
+          <button @click="saveIngredients">保存本周食材</button>
+          <p v-if="ingredientsSaved">已保存</p>
+        </section>
+
+        <section v-if="tab==='profile'">
+          <label>偏爱菜系（逗号分隔）<input v-model="profileText.cuisine" /></label>
+          <label>辣度 0-5
+            <input type="number" min="0" max="5" v-model.number="profile.spicy" />
+          </label>
+          <label>忌口（逗号分隔）<input v-model="profileText.dislikes" /></label>
+          <button @click="saveProfile">保存</button>
+          <p v-if="profileSaved">已保存</p>
+        </section>
+      </main>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>
