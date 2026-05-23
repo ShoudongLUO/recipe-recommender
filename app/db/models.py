@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -55,3 +56,22 @@ class ApiQuota(Base):
     __tablename__ = "api_quota"
     quota_date: Mapped[date] = mapped_column(Date, primary_key=True)
     count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class InviteCode(Base):
+    __tablename__ = "invite_codes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    used_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("users.id"), nullable=True
+    )
