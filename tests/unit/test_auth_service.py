@@ -64,3 +64,65 @@ def test_decode_rejects_expired():
 def test_decode_rejects_garbage():
     with pytest.raises(AuthError):
         decode_token("not-a-jwt")
+
+
+from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.db.models import Base, User
+from app.services.auth import current_user
+
+
+@pytest.fixture()
+def fresh_db():
+    eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(eng)
+    S = sessionmaker(bind=eng, future=True)
+    db = S()
+    yield db
+    db.close()
+    eng.dispose()
+
+
+def _make_user(db, username="alice"):
+    u = User(username=username, password_hash=hash_password("pass1234"))
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return u
+
+
+def test_current_user_returns_user(fresh_db):
+    u = _make_user(fresh_db)
+    tok = create_token(user_id=u.id, username=u.username)
+    got = current_user(authorization=f"Bearer {tok}", db=fresh_db)
+    assert got.id == u.id
+
+
+def test_current_user_missing_header(fresh_db):
+    with pytest.raises(HTTPException) as e:
+        current_user(authorization=None, db=fresh_db)
+    assert e.value.status_code == 401
+
+
+def test_current_user_wrong_scheme(fresh_db):
+    with pytest.raises(HTTPException) as e:
+        current_user(authorization="Basic abc", db=fresh_db)
+    assert e.value.status_code == 401
+
+
+def test_current_user_bad_token(fresh_db):
+    with pytest.raises(HTTPException) as e:
+        current_user(authorization="Bearer garbage", db=fresh_db)
+    assert e.value.status_code == 401
+
+
+def test_current_user_user_deleted(fresh_db):
+    u = _make_user(fresh_db)
+    tok = create_token(user_id=u.id, username=u.username)
+    fresh_db.delete(u)
+    fresh_db.commit()
+    with pytest.raises(HTTPException) as e:
+        current_user(authorization=f"Bearer {tok}", db=fresh_db)
+    assert e.value.status_code == 401

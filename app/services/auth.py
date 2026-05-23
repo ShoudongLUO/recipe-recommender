@@ -58,3 +58,33 @@ def decode_token(token: str) -> dict:
         raise AuthError("Token expired") from e
     except JWTError as e:
         raise AuthError("Invalid token") from e
+
+
+from typing import Optional
+
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy.orm import Session
+
+from app.db.models import User
+from app.db.session import get_db
+
+
+def current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization[len("Bearer "):]
+    try:
+        payload = decode_token(token)
+    except AuthError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    try:
+        user_id = _uuid.UUID(payload["sub"])
+    except (KeyError, ValueError) as e:
+        raise HTTPException(status_code=401, detail="Invalid token") from e
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
