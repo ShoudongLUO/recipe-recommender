@@ -85,3 +85,44 @@ def test_register_short_password(client, db_session):
         "invite_code": "GoodInvite01",
     })
     assert r.status_code == 422
+
+
+def _register(client, db_session, username="alice", password="pass1234", code="LoginCode001"):
+    db_session.add(InviteCode(code=code))
+    db_session.commit()
+    r = client.post("/api/auth/register", json={
+        "username": username,
+        "password": password,
+        "invite_code": code,
+    })
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_login_success(client, db_session):
+    _register(client, db_session, username="bob", password="bobpass12", code="LoginGood001")
+    r = client.post("/api/auth/login", json={"username": "bob", "password": "bobpass12"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["username"] == "bob"
+    assert isinstance(body["token"], str)
+
+
+def test_login_wrong_password(client, db_session):
+    _register(client, db_session, username="carol", password="carolpass12", code="LoginGood002")
+    r = client.post("/api/auth/login", json={"username": "carol", "password": "wrong"})
+    assert r.status_code == 401
+    assert "用户名或密码错误" in r.json()["detail"]
+
+
+def test_login_unknown_user(client):
+    r = client.post("/api/auth/login", json={"username": "ghost", "password": "anything"})
+    assert r.status_code == 401
+    assert "用户名或密码错误" in r.json()["detail"]
+
+
+def test_token_works_format(client, db_session):
+    _register(client, db_session, username="dave", password="davepass12", code="LoginGood003")
+    r = client.post("/api/auth/login", json={"username": "dave", "password": "davepass12"})
+    token = r.json()["token"]
+    assert token.count(".") == 2  # JWT format

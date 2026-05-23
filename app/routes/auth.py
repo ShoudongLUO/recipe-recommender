@@ -5,13 +5,13 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import InviteCode, User
 from app.db.session import get_db
-from app.services.auth import create_token, hash_password
+from app.services.auth import create_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -54,5 +54,19 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="用户名已存在")
 
+    token = create_token(user_id=user.id, username=user.username)
+    return TokenOut(token=token, username=user.username)
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+@router.post("/login", response_model=TokenOut)
+def login(body: LoginIn, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.username == body.username))
+    if user is None or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = create_token(user_id=user.id, username=user.username)
     return TokenOut(token=token, username=user.username)
