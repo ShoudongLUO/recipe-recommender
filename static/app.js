@@ -40,6 +40,8 @@ createApp({
     const ingredientsText = ref(""); const ingredientsSaved = ref(false);
     const commonIngredients = COMMON_INGREDIENTS;
 
+    const planning = reactive({ open: false, loading: false, candidates: [], selected: [], aiWarning: "" });
+
     const history = ref(null);
 
     const profile = reactive({ cuisine_prefs: [], spicy: 2, dislikes: [] });
@@ -203,6 +205,41 @@ createApp({
       } catch {}
     }
 
+    async function openPlanner() {
+      planning.open = true; planning.loading = true; planning.candidates = []; planning.selected = []; planning.aiWarning = "";
+      try {
+        const { data } = await safeApi("/api/plan/candidates", { method: "POST", body: {} });
+        planning.candidates = data.candidates || [];
+        planning.aiWarning = data.ai_warning || "";
+      } catch (e) { planning.aiWarning = e.detail || "规划失败，请稍后再试"; }
+      finally { planning.loading = false; }
+    }
+    function togglePlanPick(name) {
+      const i = planning.selected.indexOf(name);
+      if (i >= 0) planning.selected.splice(i, 1); else planning.selected.push(name);
+    }
+    function shoppingList() {
+      const have = new Set(currentIngredients());
+      const need = [];
+      for (const c of planning.candidates) {
+        if (!planning.selected.includes(c.name)) continue;
+        for (const ing of (c.main_ingredients || [])) {
+          if (!have.has(ing) && !need.includes(ing)) need.push(ing);
+        }
+      }
+      return need;
+    }
+    async function addPlanToIngredients() {
+      if (!planning.selected.length) { planning.aiWarning = "先勾选几道菜"; return; }
+      const merged = Array.from(new Set([...currentIngredients(), ...shoppingList()]));
+      try {
+        await safeApi("/api/ingredients", { method: "PUT", body: { items: merged } });
+        ingredientsText.value = merged.join(", ");
+        planning.open = false;
+        ingredientsSaved.value = true; setTimeout(() => (ingredientsSaved.value = false), 2000);
+      } catch {}
+    }
+
     async function saveProfile() {
       const cuisine_prefs = splitItems(profileText.cuisine);
       const dislikes = splitItems(profileText.dislikes);
@@ -237,6 +274,7 @@ createApp({
       dishes, newDishName, addError, addBusy, addProgress, addDishes, removeDish,
       editingId, editForm, editError, startEdit, saveEdit, mealOpts, toggleEditMeal, mealsShort,
       ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
+      planning, openPlanner, togglePlanPick, shoppingList, addPlanToIngredients,
       history, loadHistory,
       profile, profileText, profileSaved, saveProfile,
       llm, pickPreset, fetchModels, saveLlm,

@@ -128,6 +128,28 @@
 
       <!-- INGREDIENTS -->
       <section v-if="tab==='ingredients'">
+        <button class="btn btn-primary" style="margin-bottom:.75rem" @click="openPlanner">还没买菜？帮我规划本周</button>
+        <div v-if="planning.open" class="card">
+          <p v-if="planning.loading" class="empty">规划中…</p>
+          <div v-if="planning.aiWarning" class="warning">{{ planning.aiWarning }}</div>
+          <div v-if="!planning.loading && planning.candidates.length">
+            <div class="section-head"><span class="dot sage"></span>挑几道想做的</div>
+            <div class="chip-row">
+              <span v-for="c in planning.candidates" :key="c.source + c.name"
+                    class="chip" :class="{ on: planning.selected.includes(c.name) }"
+                    @click="togglePlanPick(c.name)">
+                {{ c.name }}<span v-if="c.source==='ai'" class="new-tag">新</span>
+              </span>
+            </div>
+            <div v-if="shoppingList().length">
+              <div class="section-head"><span class="dot yellow"></span>需要采购</div>
+              <div class="chip-row"><span v-for="ing in shoppingList()" :key="ing" class="chip on">{{ ing }}</span></div>
+              <button class="btn btn-primary" @click="addPlanToIngredients">加入本周食材</button>
+            </div>
+            <p v-else-if="planning.selected.length" class="empty">这些菜的食材你都已有，无需采购。</p>
+          </div>
+          <p v-if="!planning.loading && !planning.candidates.length && !planning.aiWarning" class="empty">还没有可推荐的菜，先去「会的菜」添加几道。</p>
+        </div>
         <p class="hint">常见食材，点一下加入/取消：</p>
         <div class="chip-row">
           <span v-for="ing in commonIngredients" :key="ing" class="chip" :class="{ on: hasIngredient(ing) }" @click="toggleChip(ing)">{{ ing }}</span>
