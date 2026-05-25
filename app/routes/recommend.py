@@ -14,7 +14,8 @@ from app.db.session import get_db
 from app.services.auth import current_user
 from app.services.cache import recommend_cache
 from app.services.filters import can_cook_with, has_forbidden
-from app.services.gemini import GeminiClient, GeminiParseError, GeminiUnavailable
+from app.services.llm.base import LLMUnavailable, LLMParseError
+from app.services.llm import factory
 from app.services.scoring import score_dish
 from app.services.week import get_monday
 
@@ -23,10 +24,6 @@ router = APIRouter(prefix="/api", tags=["recommend"])
 
 class RecommendIn(BaseModel):
     meal_type: str = Field(pattern="^(breakfast|lunch|dinner)$")
-
-
-def get_gemini(request: Request) -> GeminiClient:
-    return request.app.state.gemini
 
 
 def _dish_to_dict(d: Dish) -> dict:
@@ -58,7 +55,6 @@ def _today_quota(db: Session, user_id) -> int:
 def recommend(
     body: RecommendIn,
     db: Session = Depends(get_db),
-    gemini: GeminiClient = Depends(get_gemini),
     user: User = Depends(current_user),
 ) -> dict[str, Any]:
     profile = db.get(Profile, user.id)
@@ -114,17 +110,12 @@ def recommend(
 
     if _today_quota(db, user.id) >= settings.daily_gemini_quota:
         warning = "今日 AI 配额已用尽，明日恢复"
-    elif not gemini.available:
-        warning = "新菜推荐暂不可用"
     else:
         try:
-            raw_dishes = gemini.generate_new_dishes(
-                cuisine_prefs=profile.cuisine_prefs,
-                spicy=profile.spicy,
-                dislikes=profile.dislikes,
-                ingredients=pantry,
-                cuisine_histogram=cuisine_hist,
-                cooked_this_week=cooked_names,
+            raw_dishes, fell_back = factory.recommend_new_dishes(
+                db, user,
+                cuisine_prefs=profile.cuisine_prefs, spicy=profile.spicy, dislikes=profile.dislikes,
+                ingredients=pantry, cuisine_histogram=cuisine_hist, cooked_this_week=cooked_names,
             )
             _bump_quota(db, user.id)
             pantry_set = set(pantry)
@@ -133,22 +124,22 @@ def recommend(
                 if has_forbidden(d.get("cuisine"), ings, profile.dislikes):
                     continue
                 missing = [i for i in ings if i not in pantry_set]
-                if len(missing) > MAX_MISSING:
+                if len(missing) > 2:
                     continue
                 new_dishes.append({
-                    "name": d.get("name"),
-                    "category": d.get("category"),
-                    "cuisine": d.get("cuisine"),
-                    "spicy": int(d.get("spicy", 0) or 0),
-                    "main_ingredients": ings,
-                    "missing_ingredients": missing,
-                    "why_recommended": d.get("why_recommended", ""),
+                    "name": d.get("name"), "category": d.get("category"), "cuisine": d.get("cuisine"),
+                    "spicy": int(d.get("spicy", 0) or 0), "main_ingredients": ings,
+                    "missing_ingredients": missing, "why_recommended": d.get("why_recommended", ""),
                     "source": "gemini_suggested",
                 })
-        except (GeminiUnavailable, GeminiParseError) as e:
+            if fell_back:
+                warning = "今日 pro 额度已尽，已临时用 flash"
+        except (LLMUnavailable, LLMParseError) as e:
             msg = str(e)
             if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
-                warning = "今日 AI 额度已用尽（Gemini 免费层限制），明日恢复"
+                warning = "今日 AI 额度已用尽（免费层限制），明日恢复"
+            elif "no LLM configured" in msg or "no api key" in msg:
+                warning = "请先在「设置」里配置 AI（或暂无可用 key）"
             else:
                 warning = "新菜推荐暂不可用"
 

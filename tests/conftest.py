@@ -12,37 +12,44 @@ from sqlalchemy.pool import StaticPool
 from app.db.models import Base, Profile, User
 from app.db.session import get_db
 from app.services.auth import create_token, hash_password
-from app.services.gemini import GeminiClient
+from app.services.llm import factory as _llm_factory
 
 
-class FakeTransport:
-    """FIFO queue of scripted responses. Strings are returned, Exceptions are raised."""
+class FakeLLM:
+    """Mock LLM for testing. Queue responses (dicts/lists) or Exceptions."""
 
     def __init__(self):
-        self.responses: list = []
-        self.calls: list[tuple[str, float]] = []
+        self.classify_queue = []     # dicts or Exceptions
+        self.new_dishes_queue = []   # lists or Exceptions
+        self.new_calls = 0
 
-    def push(self, response) -> None:
-        self.responses.append(response)
+    def classify(self, name):
+        r = self.classify_queue.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
 
-    def generate(self, prompt: str, *, temperature: float = 0.7, timeout: float = 8.0) -> str:
-        self.calls.append((prompt, temperature))
-        if not self.responses:
-            raise RuntimeError("FakeTransport: no scripted response")
-        r = self.responses.pop(0)
+    def new_dishes(self):
+        self.new_calls += 1
+        r = self.new_dishes_queue.pop(0)
         if isinstance(r, Exception):
             raise r
         return r
 
 
 @pytest.fixture()
-def fake_transport() -> FakeTransport:
-    return FakeTransport()
+def fake_llm(monkeypatch):
+    f = FakeLLM()
 
+    def _classify(db, user, name):
+        return f.classify(name)
 
-@pytest.fixture()
-def fake_gemini(fake_transport) -> GeminiClient:
-    return GeminiClient(transport=fake_transport)
+    def _recommend(db, user, **kwargs):
+        return f.new_dishes(), False
+
+    monkeypatch.setattr(_llm_factory, "classify_with_fallback", _classify)
+    monkeypatch.setattr(_llm_factory, "recommend_new_dishes", _recommend)
+    return f
 
 
 @pytest.fixture()
@@ -99,22 +106,17 @@ def test_user_b(db_session) -> User:
 
 
 @pytest.fixture()
-def client(db_session, fake_gemini) -> Iterator[TestClient]:
+def client(db_session) -> Iterator[TestClient]:
     from app.main import app
 
     def _override_db():
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
-    original_gemini = getattr(app.state, "gemini", None)
-    app.state.gemini = fake_gemini
-
     with TestClient(app) as c:
         yield c
 
     app.dependency_overrides.clear()
-    if original_gemini is not None:
-        app.state.gemini = original_gemini
 
 
 @pytest.fixture()
