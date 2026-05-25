@@ -125,11 +125,14 @@ def recommend(
                 cooked_this_week=cooked_names,
             )
             _bump_quota(db, user.id)
+            _filtered = []
             for d in raw_dishes:
                 ings = d.get("main_ingredients", [])
                 if not can_cook_with(ings, pantry):
+                    _filtered.append(f"{d.get('name')}!ings={ings}")
                     continue
                 if has_forbidden(d.get("cuisine"), ings, profile.dislikes):
+                    _filtered.append(f"{d.get('name')}!forbidden")
                     continue
                 new_dishes.append({
                     "name": d.get("name"),
@@ -140,6 +143,7 @@ def recommend(
                     "why_recommended": d.get("why_recommended", ""),
                     "source": "gemini_suggested",
                 })
+            debug = f"raw={len(raw_dishes)} kept={len(new_dishes)} filtered={_filtered}"
         except (GeminiUnavailable, GeminiParseError) as e:
             warning = "新菜推荐暂不可用"
             debug = f"{type(e).__name__}: {str(e)[:400]}"
