@@ -16,6 +16,7 @@ from app.services.cache import recommend_cache
 from app.services.filters import can_cook_with, has_forbidden
 from app.services.llm.base import LLMUnavailable, LLMParseError
 from app.services.llm import factory
+from app.services.quota import bump_quota, today_quota
 from app.services.scoring import score_dish
 from app.services.week import get_monday
 
@@ -34,23 +35,6 @@ def _dish_to_dict(d: Dish) -> dict:
         "main_ingredients": d.main_ingredients, "spicy": d.spicy,
         "source": d.source, "cook_count": d.cook_count,
     }
-
-
-def _bump_quota(db: Session, user_id) -> int:
-    today = date.today()
-    row = db.get(ApiQuota, (user_id, today))
-    if row is None:
-        row = ApiQuota(user_id=user_id, quota_date=today, count=1)
-        db.add(row)
-    else:
-        row.count += 1
-    db.commit()
-    return row.count
-
-
-def _today_quota(db: Session, user_id) -> int:
-    row = db.get(ApiQuota, (user_id, date.today()))
-    return row.count if row else 0
 
 
 @router.post("/recommend")
@@ -112,7 +96,7 @@ def recommend(
     MAX_MISSING = 2
 
     llm_failed = False
-    if _today_quota(db, user.id) >= settings.daily_gemini_quota:
+    if today_quota(db, user.id) >= settings.daily_gemini_quota:
         warning = "今日 AI 配额已用尽，明日恢复"
     else:
         try:
@@ -122,7 +106,7 @@ def recommend(
                 ingredients=pantry, cuisine_histogram=cuisine_hist, cooked_this_week=cooked_names,
                 meal_label=MEAL_LABELS[body.meal_type],
             )
-            _bump_quota(db, user.id)
+            bump_quota(db, user.id)
             pantry_set = set(pantry)
             for d in raw_dishes:
                 ings = d.get("main_ingredients", [])
