@@ -112,12 +112,10 @@ def recommend(
     # the pantry; surface those as a shopping hint instead of dropping the dish.
     MAX_MISSING = 2
 
-    debug: str | None = None
     if _today_quota(db, user.id) >= settings.daily_gemini_quota:
         warning = "今日 AI 配额已用尽，明日恢复"
     elif not gemini.available:
         warning = "新菜推荐暂不可用"
-        debug = f"available=False model={settings.gemini_model}"
     else:
         try:
             raw_dishes = gemini.generate_new_dishes(
@@ -148,12 +146,13 @@ def recommend(
                     "source": "gemini_suggested",
                 })
         except (GeminiUnavailable, GeminiParseError) as e:
-            warning = "新菜推荐暂不可用"
-            debug = f"{type(e).__name__}: {str(e)[:300]} model={settings.gemini_model}"
+            msg = str(e)
+            if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
+                warning = "今日 AI 额度已用尽（Gemini 免费层限制），明日恢复"
+            else:
+                warning = "新菜推荐暂不可用"
 
     payload = {"known": known, "new": new_dishes, "warning": warning}
-    if debug:
-        payload["_debug"] = debug
     recommend_cache.set(cache_key, payload)
     return payload
 
