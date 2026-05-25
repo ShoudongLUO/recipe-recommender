@@ -16,6 +16,7 @@ class Settings:
     daily_gemini_quota: int
     jwt_secret: str
     bcrypt_rounds: int
+    llm_enc_key: str
 
 
 def load_settings() -> Settings:
@@ -26,6 +27,7 @@ def load_settings() -> Settings:
         daily_gemini_quota=int(os.getenv("DAILY_GEMINI_QUOTA", "100")),
         jwt_secret=os.getenv("JWT_SECRET", ""),
         bcrypt_rounds=int(os.getenv("BCRYPT_ROUNDS", "12")),
+        llm_enc_key=os.getenv("LLM_ENC_KEY", ""),
     )
 
 
