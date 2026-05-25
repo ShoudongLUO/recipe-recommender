@@ -76,3 +76,37 @@ def mark_pro_exhausted(db: Session, user: User) -> None:
         db.add(cfg)
     cfg.gemini_fallback_date = date.today()
     db.commit()
+
+
+def _is_quota_error(e: Exception) -> bool:
+    s = str(e)
+    return "RESOURCE_EXHAUSTED" in s or "429" in s
+
+
+def classify_with_fallback(db: Session, user: User, name: str) -> dict:
+    svc = build_llm_for_user(db, user)
+    try:
+        return svc.classify_dish(name)
+    except LLMUnavailable as e:
+        if _is_quota_error(e) and is_gemini_pro_config(db, user):
+            mark_pro_exhausted(db, user)
+            return build_llm_for_user(db, user, force_flash=True).classify_dish(name)
+        raise
+
+
+def recommend_new_dishes(
+    db: Session, user: User, **kwargs
+) -> tuple[list[dict], bool]:
+    svc = build_llm_for_user(db, user)
+    try:
+        return svc.generate_new_dishes(**kwargs), False
+    except LLMUnavailable as e:
+        if _is_quota_error(e) and is_gemini_pro_config(db, user):
+            mark_pro_exhausted(db, user)
+            return (
+                build_llm_for_user(db, user, force_flash=True).generate_new_dishes(
+                    **kwargs
+                ),
+                True,
+            )
+        raise
