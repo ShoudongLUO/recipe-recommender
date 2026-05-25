@@ -221,3 +221,11 @@ def test_generate_plan_dishes_includes_count_and_known_in_prompt():
     p = stub.prompts[0]
     assert "番茄炒蛋" in p
     assert "3" in p
+
+
+def test_generate_recipe_returns_text_and_uses_name():
+    stub = _StubProvider("步骤一：热油。\n步骤二：下蛋。")
+    svc = LLMService(stub)
+    out = svc.generate_recipe(name="番茄炒蛋", cuisine="家常", main_ingredients=["番茄", "鸡蛋"])
+    assert out == "步骤一：热油。\n步骤二：下蛋。"
+    assert "番茄炒蛋" in stub.prompts[0]

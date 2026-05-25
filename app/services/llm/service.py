@@ -68,3 +68,11 @@ class LLMService:
         )
         data = parse_llm_json(self.provider.generate(prompt, temperature=0.8))
         return list(data.get("dishes", []))
+
+    def generate_recipe(self, *, name, cuisine, main_ingredients) -> str:
+        prompt = _load_prompt("recipe.txt").format(
+            name=name,
+            cuisine=cuisine or "家常",
+            main_ingredients=", ".join(main_ingredients) or "(自行判断)",
+        )
+        return (self.provider.generate(prompt, temperature=0.6) or "").strip()
