@@ -31,7 +31,22 @@ class TokenOut(BaseModel):
 def register(body: RegisterIn, db: Session = Depends(get_db)):
     user_id = uuid4()
 
-    # Atomically consume invite code
+    # Insert user + profile first so the FK target for invite_codes.used_by_user_id
+    # exists before we reference it (Postgres enforces FKs; ordering matters).
+    user = User(
+        id=user_id,
+        username=body.username,
+        password_hash=hash_password(body.password),
+    )
+    db.add(user)
+    db.add(Profile(user_id=user_id, cuisine_prefs=[], spicy=2, dislikes=[]))
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="用户名已存在")
+
+    # Atomically consume invite code now that the user row exists
     stmt = (
         update(InviteCode)
         .where(InviteCode.code == body.invite_code, InviteCode.used_at.is_(None))
@@ -42,20 +57,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=400, detail="邀请码无效或已使用")
 
-    user = User(
-        id=user_id,
-        username=body.username,
-        password_hash=hash_password(body.password),
-    )
-    db.add(user)
-    profile = Profile(user_id=user_id, cuisine_prefs=[], spicy=2, dislikes=[])
-    db.add(profile)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="用户名已存在")
-
+    db.commit()
     token = create_token(user_id=user.id, username=user.username)
     return TokenOut(token=token, username=user.username)
 
