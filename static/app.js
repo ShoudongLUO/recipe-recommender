@@ -2,255 +2,199 @@ const { createApp, reactive, ref, onMounted } = Vue;
 
 const TOKEN_KEY = "rr_token";
 const USERNAME_KEY = "rr_username";
+const COMMON_INGREDIENTS = ["番茄","鸡蛋","猪肉","鸡肉","牛肉","青菜","白菜","土豆","豆腐","大蒜","洋葱","胡萝卜","香菇","虾","豆角","茄子","黄瓜","青椒"];
 
 async function api(path, opts = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, {
-    ...opts,
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  if (res.status === 401) {
-    const err = new Error("Unauthorized");
-    err.status = 401;
-    throw err;
-  }
+  const res = await fetch(path, { ...opts, headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  if (res.status === 401) { const e = new Error("Unauthorized"); e.status = 401; throw e; }
   if (!res.ok && res.status !== 409) {
-    const err = new Error(`HTTP ${res.status}`);
-    err.status = res.status;
-    try { err.detail = (await res.json()).detail; } catch {}
-    throw err;
+    const e = new Error(`HTTP ${res.status}`); e.status = res.status;
+    try { e.detail = (await res.json()).detail; } catch {}
+    throw e;
   }
   return { status: res.status, data: res.status === 204 ? null : await res.json() };
 }
 
 createApp({
   setup() {
-    // --- auth state ---
     const view = ref("loading");
     const auth = reactive({ token: null, username: null });
     const authMode = ref("login");
     const authForm = reactive({ username: "", password: "", invite_code: "" });
-    const authError = ref("");
-    const authBusy = ref(false);
+    const authError = ref(""); const authBusy = ref(false);
 
-    // --- main app state ---
     const tab = ref("home");
     const loading = ref(false);
     const result = reactive({});
 
     const dishes = ref([]);
-    const newDishName = ref("");
-    const addError = ref("");
+    const newDishName = ref(""); const addError = ref(""); const addBusy = ref(false); const addProgress = ref("");
+    const editingId = ref(null);
+    const editForm = reactive({ name: "", cuisine: "", ingredients: "", spicy: 0, category: "" });
+    const editError = ref("");
 
-    const ingredientsText = ref("");
-    const ingredientsSaved = ref(false);
+    const ingredientsText = ref(""); const ingredientsSaved = ref(false);
+    const commonIngredients = COMMON_INGREDIENTS;
+
+    const history = ref(null);
 
     const profile = reactive({ cuisine_prefs: [], spicy: 2, dislikes: [] });
     const profileText = reactive({ cuisine: "", dislikes: "" });
     const profileSaved = ref(false);
 
-    function mealLabel(m) {
-      return { breakfast: "早餐", lunch: "午餐", dinner: "晚餐" }[m];
-    }
+    function mealLabel(m) { return { breakfast: "早餐", lunch: "午餐", dinner: "晚餐" }[m] || m; }
+    function fmtDate(iso) { try { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; } catch { return ""; } }
+    function splitItems(s) { return s.split(/[,，]/).map(x => x.trim()).filter(Boolean); }
 
     function setLoggedIn(token, username) {
-      localStorage.setItem(TOKEN_KEY, token);
-      localStorage.setItem(USERNAME_KEY, username);
-      auth.token = token;
-      auth.username = username;
-      view.value = "main";
-      loadDishes();
-      loadIngredients();
-      loadProfile();
+      localStorage.setItem(TOKEN_KEY, token); localStorage.setItem(USERNAME_KEY, username);
+      auth.token = token; auth.username = username; view.value = "main";
+      loadDishes(); loadIngredients(); loadProfile();
     }
-
     function logout() {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USERNAME_KEY);
-      auth.token = null;
-      auth.username = null;
-      view.value = "login";
-      authForm.username = "";
-      authForm.password = "";
-      authForm.invite_code = "";
+      localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USERNAME_KEY);
+      auth.token = null; auth.username = null; view.value = "login";
+      authForm.username = ""; authForm.password = ""; authForm.invite_code = "";
     }
-
-    function handle401() {
-      logout();
-    }
+    function handle401() { logout(); }
 
     async function submitAuth() {
-      authBusy.value = true;
-      authError.value = "";
+      authBusy.value = true; authError.value = "";
       try {
         const url = authMode.value === "login" ? "/api/auth/login" : "/api/auth/register";
         const body = authMode.value === "login"
           ? { username: authForm.username, password: authForm.password }
           : { username: authForm.username, password: authForm.password, invite_code: authForm.invite_code };
         const { status, data } = await api(url, { method: "POST", body });
-        if (status !== 200 || !data || !data.token) {
-          authError.value = (data && data.detail) || "注册或登录失败";
-          return;
-        }
+        if (status !== 200 || !data || !data.token) { authError.value = (data && data.detail) || "注册或登录失败"; return; }
         setLoggedIn(data.token, data.username);
       } catch (e) {
-        if (e.status === 401) {
-          authError.value = "用户名或密码错误";
-        } else if (e.detail) {
-          authError.value = e.detail;
-        } else {
-          authError.value = e.message;
-        }
-      } finally {
-        authBusy.value = false;
-      }
+        authError.value = e.status === 401 ? "用户名或密码错误" : (e.detail || e.message);
+      } finally { authBusy.value = false; }
     }
 
     async function safeApi(...args) {
-      try {
-        return await api(...args);
-      } catch (e) {
-        if (e.status === 401) {
-          handle401();
-        }
-        throw e;
-      }
+      try { return await api(...args); }
+      catch (e) { if (e.status === 401) handle401(); throw e; }
     }
 
-    async function loadDishes() {
-      try {
-        const { data } = await safeApi("/api/dishes");
-        dishes.value = data;
-      } catch (e) {}
-    }
+    function go(t) { tab.value = t; if (t === "history") loadHistory(); }
 
-    async function loadIngredients() {
-      try {
-        const { data } = await safeApi("/api/ingredients");
-        ingredientsText.value = (data.items || []).join(", ");
-      } catch (e) {}
-    }
-
+    async function loadDishes() { try { const { data } = await safeApi("/api/dishes"); dishes.value = data; } catch {} }
+    async function loadIngredients() { try { const { data } = await safeApi("/api/ingredients"); ingredientsText.value = (data.items || []).join(", "); } catch {} }
     async function loadProfile() {
       try {
         const { data } = await safeApi("/api/profile");
-        profile.cuisine_prefs = data.cuisine_prefs;
-        profile.spicy = data.spicy;
-        profile.dislikes = data.dislikes;
-        profileText.cuisine = data.cuisine_prefs.join(", ");
-        profileText.dislikes = data.dislikes.join(", ");
-      } catch (e) {}
+        profile.cuisine_prefs = data.cuisine_prefs; profile.spicy = data.spicy; profile.dislikes = data.dislikes;
+        profileText.cuisine = data.cuisine_prefs.join(", "); profileText.dislikes = data.dislikes.join(", ");
+      } catch {}
     }
+    async function loadHistory() { history.value = null; try { const { data } = await safeApi("/api/history"); history.value = data; } catch {} }
 
     async function recommend(meal) {
-      loading.value = true;
-      Object.keys(result).forEach((k) => delete result[k]);
-      try {
-        const { data } = await safeApi("/api/recommend", { method: "POST", body: { meal_type: meal } });
-        Object.assign(result, data);
-        result._meal = meal;
-      } catch (e) {} finally {
-        loading.value = false;
-      }
+      loading.value = true; Object.keys(result).forEach(k => delete result[k]);
+      try { const { data } = await safeApi("/api/recommend", { method: "POST", body: { meal_type: meal } }); Object.assign(result, data); result._meal = meal; }
+      catch {} finally { loading.value = false; }
     }
 
-    async function addDish() {
+    async function addDishes() {
       addError.value = "";
+      const names = splitItems(newDishName.value);
+      if (!names.length) return;
+      addBusy.value = true;
+      const dupes = [];
       try {
-        const { status } = await safeApi("/api/dishes", { method: "POST", body: { name: newDishName.value.trim() } });
-        if (status === 409) {
-          addError.value = "已在库中";
-          return;
+        for (let i = 0; i < names.length; i++) {
+          addProgress.value = `添加中 (${i+1}/${names.length})`;
+          const { status } = await safeApi("/api/dishes", { method: "POST", body: { name: names[i] } });
+          if (status === 409) dupes.push(names[i]);
         }
         newDishName.value = "";
+        if (dupes.length) addError.value = `已在库中：${dupes.join("、")}`;
         await loadDishes();
-      } catch (e) {
-        addError.value = e.message;
-      }
+      } catch (e) { addError.value = e.detail || e.message; }
+      finally { addBusy.value = false; addProgress.value = ""; }
     }
 
+    async function removeDish(d) {
+      if (!confirm(`删除「${d.name}」？做过记录也会一起删。`)) return;
+      try { await safeApi(`/api/dishes/${d.id}`, { method: "DELETE" }); await loadDishes(); } catch {}
+    }
+
+    function startEdit(d) {
+      editingId.value = d.id; editError.value = "";
+      editForm.name = d.name; editForm.cuisine = d.cuisine || "";
+      editForm.ingredients = (d.main_ingredients || []).join(", ");
+      editForm.spicy = d.spicy; editForm.category = d.category || "";
+    }
+    async function saveEdit(d) {
+      editError.value = "";
+      const body = {
+        name: editForm.name.trim(), category: editForm.category.trim() || null,
+        cuisine: editForm.cuisine.trim() || null, main_ingredients: splitItems(editForm.ingredients),
+        spicy: Number(editForm.spicy) || 0, tags: d.tags || [],
+      };
+      try { const { status } = await safeApi(`/api/dishes/${d.id}`, { method: "PUT", body });
+        if (status === 409) { editError.value = "已有同名菜"; return; }
+        editingId.value = null; await loadDishes();
+      } catch (e) { editError.value = e.detail || e.message; }
+    }
+
+    function currentIngredients() { return splitItems(ingredientsText.value); }
+    function hasIngredient(ing) { return currentIngredients().includes(ing); }
+    function toggleChip(ing) {
+      const items = currentIngredients();
+      const idx = items.indexOf(ing);
+      if (idx >= 0) items.splice(idx, 1); else items.push(ing);
+      ingredientsText.value = items.join(", ");
+    }
     async function saveIngredients() {
-      const items = ingredientsText.value
-        .split(/[,，]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      try {
-        await safeApi("/api/ingredients", { method: "PUT", body: { items } });
-        ingredientsSaved.value = true;
-        setTimeout(() => (ingredientsSaved.value = false), 2000);
-      } catch (e) {}
+      const items = currentIngredients();
+      try { await safeApi("/api/ingredients", { method: "PUT", body: { items } });
+        ingredientsSaved.value = true; setTimeout(() => (ingredientsSaved.value = false), 2000);
+      } catch {}
     }
 
     async function saveProfile() {
-      const cuisine_prefs = profileText.cuisine.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
-      const dislikes = profileText.dislikes.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
-      try {
-        await safeApi("/api/profile", {
-          method: "PUT",
-          body: { cuisine_prefs, spicy: profile.spicy, dislikes },
-        });
-        profile.cuisine_prefs = cuisine_prefs;
-        profile.dislikes = dislikes;
-        profileSaved.value = true;
-        setTimeout(() => (profileSaved.value = false), 2000);
-      } catch (e) {}
+      const cuisine_prefs = splitItems(profileText.cuisine);
+      const dislikes = splitItems(profileText.dislikes);
+      try { await safeApi("/api/profile", { method: "PUT", body: { cuisine_prefs, spicy: profile.spicy, dislikes } });
+        profile.cuisine_prefs = cuisine_prefs; profile.dislikes = dislikes;
+        profileSaved.value = true; setTimeout(() => (profileSaved.value = false), 2000);
+      } catch {}
     }
 
-    async function logKnown(d) {
-      try {
-        await safeApi("/api/log", { method: "POST", body: { dish_id: d.id, meal_type: result._meal } });
-        await recommend(result._meal);
-      } catch (e) {}
-    }
-
+    async function logKnown(d) { try { await safeApi("/api/log", { method: "POST", body: { dish_id: d.id, meal_type: result._meal } }); await recommend(result._meal); } catch {} }
     async function logNew(d, addToLibrary) {
-      const body = {
-        gemini_dish: d,
-        meal_type: result._meal,
-        add_to_library: addToLibrary,
-      };
-      try {
-        await safeApi("/api/log", { method: "POST", body });
-        if (addToLibrary) await loadDishes();
-        await recommend(result._meal);
-      } catch (e) {}
+      try { await safeApi("/api/log", { method: "POST", body: { gemini_dish: d, meal_type: result._meal, add_to_library: addToLibrary } });
+        if (addToLibrary) await loadDishes(); await recommend(result._meal);
+      } catch {}
     }
 
     onMounted(async () => {
-      const token = localStorage.getItem(TOKEN_KEY);
-      const username = localStorage.getItem(USERNAME_KEY);
-      if (!token || !username) {
-        view.value = "login";
-        return;
-      }
-      auth.token = token;
-      auth.username = username;
+      const token = localStorage.getItem(TOKEN_KEY), username = localStorage.getItem(USERNAME_KEY);
+      if (!token || !username) { view.value = "login"; return; }
+      auth.token = token; auth.username = username;
       try {
-        // Validate token by hitting /api/profile
         const { data } = await api("/api/profile");
-        profile.cuisine_prefs = data.cuisine_prefs;
-        profile.spicy = data.spicy;
-        profile.dislikes = data.dislikes;
-        profileText.cuisine = data.cuisine_prefs.join(", ");
-        profileText.dislikes = data.dislikes.join(", ");
-        await loadDishes();
-        await loadIngredients();
-        view.value = "main";
-      } catch (e) {
-        logout();
-      }
+        profile.cuisine_prefs = data.cuisine_prefs; profile.spicy = data.spicy; profile.dislikes = data.dislikes;
+        profileText.cuisine = data.cuisine_prefs.join(", "); profileText.dislikes = data.dislikes.join(", ");
+        await loadDishes(); await loadIngredients(); view.value = "main";
+      } catch { logout(); }
     });
 
     return {
       view, auth, authMode, authForm, authError, authBusy, submitAuth, logout,
-      tab, loading, result,
-      dishes, newDishName, addError, addDish,
-      ingredientsText, ingredientsSaved, saveIngredients,
+      tab, go, loading, result,
+      dishes, newDishName, addError, addBusy, addProgress, addDishes, removeDish,
+      editingId, editForm, editError, startEdit, saveEdit,
+      ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
+      history, loadHistory,
       profile, profileText, profileSaved, saveProfile,
-      recommend, logKnown, logNew, mealLabel,
+      recommend, logKnown, logNew, mealLabel, fmtDate,
     };
   },
 }).mount("#app");
