@@ -117,3 +117,30 @@ def test_openai_compat_config(db):
     svc = build_llm_for_user(db, u)
     assert svc.provider.model == "deepseek-chat"
     assert svc.provider.available is True
+
+
+def test_plan_new_dishes_falls_back_to_flash_on_quota(monkeypatch, db):
+    from app.services.llm import factory
+
+    u = _user(db)
+    db.add(LLMConfig(user_id=u.id, provider="gemini",
+                     api_key_encrypted=encrypt("k"), model="gemini-2.5-pro"))
+    db.commit()
+
+    class _Stub:
+        def __init__(self, fail):
+            self.fail = fail
+
+        def generate_plan_dishes(self, **kw):
+            if self.fail:
+                raise LLMUnavailable("429 RESOURCE_EXHAUSTED")
+            return [{"name": "X"}]
+
+    def fake_build(db_, user_, *, force_flash=False):
+        return _Stub(fail=not force_flash)
+
+    monkeypatch.setattr(factory, "build_llm_for_user", fake_build)
+    dishes, fell = factory.plan_new_dishes(
+        db, u, cuisine_prefs=[], spicy=2, dislikes=[], known_names=[], count=4)
+    assert fell is True
+    assert dishes == [{"name": "X"}]
