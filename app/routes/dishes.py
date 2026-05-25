@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.db.models import CookingLog, Dish, User
 from app.db.session import get_db
 from app.services.auth import current_user
-from app.services.gemini import GeminiClient, GeminiParseError, GeminiUnavailable
+from app.services.llm.base import LLMUnavailable, LLMParseError
+from app.services.llm import factory
 
 router = APIRouter(prefix="/api/dishes", tags=["dishes"])
 
@@ -39,10 +40,6 @@ def _to_out(d: Dish) -> DishOut:
     )
 
 
-def get_gemini(request: Request) -> GeminiClient:
-    return request.app.state.gemini
-
-
 @router.get("", response_model=list[DishOut])
 def list_dishes(db: Session = Depends(get_db), user: User = Depends(current_user)):
     rows = db.scalars(
@@ -56,7 +53,6 @@ def add_dish(
     body: DishIn,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
-    gemini: GeminiClient = Depends(get_gemini),
 ):
     existing = db.scalar(
         select(Dish).where(Dish.user_id == user.id, Dish.name == body.name)
@@ -67,8 +63,8 @@ def add_dish(
     classified: dict = {}
     needs_review = False
     try:
-        classified = gemini.classify_dish(body.name)
-    except (GeminiUnavailable, GeminiParseError):
+        classified = factory.classify_with_fallback(db, user, body.name)
+    except (LLMUnavailable, LLMParseError):
         needs_review = True
 
     d = Dish(
