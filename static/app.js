@@ -33,9 +33,11 @@ createApp({
     const dishes = ref([]);
     const newDishName = ref(""); const addError = ref(""); const addBusy = ref(false); const addProgress = ref("");
     const editingId = ref(null);
-    const editForm = reactive({ name: "", cuisine: "", ingredients: "", spicy: 0, category: "", meals: [] });
+    const editForm = reactive({ name: "", cuisine: "", ingredients: "", spicy: 0, category: "", meals: [], recipe: "" });
     const mealOpts = [["breakfast", "早餐"], ["lunch", "午餐"], ["dinner", "晚餐"]];
     const editError = ref("");
+    const recipeViewId = ref(null);
+    const recipeModal = reactive({ open: false, loading: false, title: "", text: "", error: "", dishId: null });
 
     const ingredientsText = ref(""); const ingredientsSaved = ref(false);
     const commonIngredients = COMMON_INGREDIENTS;
@@ -175,6 +177,16 @@ createApp({
       editForm.ingredients = (d.main_ingredients || []).join(", ");
       editForm.spicy = d.spicy; editForm.category = d.category || "";
       editForm.meals = [...(d.suitable_meals || [])];
+      editForm.recipe = d.recipe || "";
+    }
+    function toggleRecipeView(id) { recipeViewId.value = recipeViewId.value === id ? null : id; }
+    async function genEditRecipe(d) {
+      editError.value = "";
+      try {
+        const { data } = await safeApi(`/api/dishes/${d.id}/generate-recipe`, { method: "POST", body: {} });
+        if (data.error) editError.value = data.error;
+        editForm.recipe = data.recipe || editForm.recipe;
+      } catch (e) { editError.value = e.detail || "生成失败"; }
     }
     async function saveEdit(d) {
       editError.value = "";
@@ -182,7 +194,7 @@ createApp({
         name: editForm.name.trim(), category: editForm.category.trim() || null,
         cuisine: editForm.cuisine.trim() || null, main_ingredients: splitItems(editForm.ingredients),
         spicy: Number(editForm.spicy) || 0, tags: d.tags || [],
-        suitable_meals: editForm.meals,
+        suitable_meals: editForm.meals, recipe: editForm.recipe,
       };
       try { const { status } = await safeApi(`/api/dishes/${d.id}`, { method: "PUT", body });
         if (status === 409) { editError.value = "已有同名菜"; return; }
@@ -251,10 +263,28 @@ createApp({
 
     async function logKnown(d) { try { await safeApi("/api/log", { method: "POST", body: { dish_id: d.id, meal_type: result._meal } }); await recommend(result._meal); } catch {} }
     async function logNew(d, addToLibrary) {
-      try { await safeApi("/api/log", { method: "POST", body: { gemini_dish: d, meal_type: result._meal, add_to_library: addToLibrary } });
-        if (addToLibrary) await loadDishes(); await recommend(result._meal);
+      try {
+        const { data } = await safeApi("/api/log", { method: "POST", body: { gemini_dish: d, meal_type: result._meal, add_to_library: addToLibrary } });
+        if (addToLibrary) { await loadDishes(); openRecipeModal(data.dish_id, d.name); }
+        await recommend(result._meal);
       } catch {}
     }
+
+    async function fetchRecipe(id) {
+      recipeModal.loading = true; recipeModal.error = "";
+      try {
+        const { data } = await safeApi(`/api/dishes/${id}/generate-recipe`, { method: "POST", body: {} });
+        recipeModal.text = data.recipe || "";
+        recipeModal.error = data.error || (recipeModal.text ? "" : "未生成有效做法，请重试");
+      } catch (e) { recipeModal.error = e.detail || "生成失败，请重试"; }
+      finally { recipeModal.loading = false; }
+    }
+    function openRecipeModal(id, title) {
+      recipeModal.open = true; recipeModal.dishId = id; recipeModal.title = title;
+      recipeModal.text = ""; recipeModal.error = "";
+      fetchRecipe(id);
+    }
+    function closeRecipeModal() { recipeModal.open = false; }
 
     onMounted(async () => {
       const token = localStorage.getItem(TOKEN_KEY), username = localStorage.getItem(USERNAME_KEY);
@@ -273,6 +303,8 @@ createApp({
       tab, go, loading, result,
       dishes, newDishName, addError, addBusy, addProgress, addDishes, removeDish,
       editingId, editForm, editError, startEdit, saveEdit, mealOpts, toggleEditMeal, mealsShort,
+      recipeViewId, toggleRecipeView, genEditRecipe,
+      recipeModal, fetchRecipe, openRecipeModal, closeRecipeModal,
       ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
       planning, openPlanner, togglePlanPick, shoppingList, addPlanToIngredients,
       history, loadHistory,

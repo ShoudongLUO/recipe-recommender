@@ -102,10 +102,15 @@
                 </div>
               </div>
               <div class="dish-actions">
+                <span @click="toggleRecipeView(d.id)" title="做法">📖</span>
                 <span @click="startEdit(d)" title="编辑">✎</span>
                 <span class="del" @click="removeDish(d)" title="删除">🗑</span>
               </div>
             </li>
+            <div v-if="recipeViewId === d.id && editingId !== d.id" class="edit-form">
+              <p v-if="d.recipe" class="recipe-text">{{ d.recipe }}</p>
+              <p v-else class="empty">暂无做法，点 ✎ 编辑里手填，或用「AI 生成做法」。</p>
+            </div>
             <div v-if="editingId === d.id" class="edit-form">
               <label>名称 <input v-model="editForm.name" /></label>
               <label>菜系 <input v-model="editForm.cuisine" /></label>
@@ -116,6 +121,9 @@
               <div class="chip-row">
                 <span v-for="[val,lbl] in mealOpts" :key="val" class="chip" :class="{ on: editForm.meals.includes(val) }" @click="toggleEditMeal(val)">{{ lbl }}</span>
               </div>
+              <label>做法</label>
+              <textarea v-model="editForm.recipe" placeholder="自己写做法，或点下面按钮 AI 生成" style="min-height:90px"></textarea>
+              <button class="btn btn-outline" style="margin-top:.4rem" @click="genEditRecipe(d)">AI 生成做法</button>
               <p v-if="editError" class="error">{{ editError }}</p>
               <div class="btn-row">
                 <button class="btn btn-primary" @click="saveEdit(d)">保存</button>
@@ -216,6 +224,20 @@
         <p v-if="llm.usingDefault" class="hint">当前在用默认 key（管理员的 Gemini）</p>
         <p v-if="llm.saved" class="saved">已保存</p>
       </section>
+
+      <!-- RECIPE MODAL -->
+      <div v-if="recipeModal.open" class="modal-overlay" @click.self="closeRecipeModal">
+        <div class="modal">
+          <span class="modal-close" @click="closeRecipeModal">×</span>
+          <h3>{{ recipeModal.title }} · 做法</h3>
+          <p v-if="recipeModal.loading" class="empty">AI 生成做法中…</p>
+          <div v-else>
+            <div v-if="recipeModal.error" class="warning">{{ recipeModal.error }}</div>
+            <p v-if="recipeModal.text" class="recipe-text">{{ recipeModal.text }}</p>
+            <button class="btn btn-outline" @click="fetchRecipe(recipeModal.dishId)" :disabled="recipeModal.loading">重试</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
