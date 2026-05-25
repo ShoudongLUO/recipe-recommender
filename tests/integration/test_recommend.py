@@ -160,6 +160,23 @@ def test_known_dishes_filtered_by_meal(authed_client, db_session, fake_llm, test
     assert "炒蛋" in names         # empty suitable_meals = all meals
 
 
+def test_failed_recommend_not_cached_allows_retry(authed_client, db_session, fake_llm, test_user):
+    """A transient LLM failure (e.g. DeepSeek timeout) must NOT be cached, so the
+    next request retries instead of returning the stuck failure for 30s."""
+    _seed_ingredients(db_session, test_user.id, ["番茄", "鸡蛋"])
+    _seed_dish(db_session, test_user.id, name="番茄炒蛋", main_ingredients=["番茄", "鸡蛋"])
+    fake_llm.new_dishes_queue.append(LLMUnavailable("request timed out"))
+    fake_llm.new_dishes_queue.append([
+        {"name": "番茄汤", "category": "汤类", "cuisine": "家常",
+         "spicy": 0, "main_ingredients": ["番茄"], "why_recommended": "y"}])
+    r1 = authed_client.post("/api/recommend", json={"meal_type": "lunch"})
+    assert r1.json()["new"] == []
+    assert "超时" in r1.json()["warning"]
+    r2 = authed_client.post("/api/recommend", json={"meal_type": "lunch"})
+    assert len(r2.json()["new"]) == 1   # retried because the failure was not cached
+    assert fake_llm.new_calls == 2
+
+
 def test_recommend_decrypt_failure_shows_clear_warning(authed_client, db_session, test_user):
     """A stored key that can't be decrypted (LLM_ENC_KEY rotated) must show a
     re-enter-key warning, NOT a misleading quota-exhausted message."""

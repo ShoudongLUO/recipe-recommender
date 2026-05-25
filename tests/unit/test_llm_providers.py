@@ -120,6 +120,22 @@ def test_openai_base_url_trailing_slash_normalized():
     assert h.posts[0][0] == "https://api.deepseek.com/chat/completions"
 
 
+def test_openai_timeout_maps_to_clear_message():
+    # Real httpx timeout exceptions often have an empty str(); detection must be
+    # by exception type name, not message.
+    class ReadTimeout(Exception):
+        pass
+
+    class _TimeoutHttp:
+        def post(self, *a, **k):
+            raise ReadTimeout()
+
+    p = OpenAICompatProvider(api_key="k", base_url="https://api.deepseek.com", model="m", http=_TimeoutHttp())
+    with pytest.raises(LLMUnavailable) as e:
+        p.generate("hi")
+    assert "timed out" in str(e.value)
+
+
 def test_openai_list_models():
     h = _FakeHttp()
     h.set_get({"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]})

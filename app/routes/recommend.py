@@ -111,6 +111,7 @@ def recommend(
     # the pantry; surface those as a shopping hint instead of dropping the dish.
     MAX_MISSING = 2
 
+    llm_failed = False
     if _today_quota(db, user.id) >= settings.daily_gemini_quota:
         warning = "今日 AI 配额已用尽，明日恢复"
     else:
@@ -139,18 +140,24 @@ def recommend(
             if fell_back:
                 warning = "今日 pro 额度已尽，已临时用 flash"
         except (LLMUnavailable, LLMParseError) as e:
+            llm_failed = True
             msg = str(e)
             if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
                 warning = "今日 AI 额度已用尽（免费层限制），明日恢复"
             elif "decrypt" in msg:
                 warning = "保存的 AI key 无法读取（可能因为加密密钥已更换），请到「设置」重新输入"
+            elif "timed out" in msg or "timeout" in msg.lower():
+                warning = "AI 响应超时（服务较慢），请再点一次重试"
             elif "no LLM configured" in msg or "no api key" in msg:
                 warning = "请先在「设置」里配置 AI（或暂无可用 key）"
             else:
                 warning = "新菜推荐暂不可用"
 
     payload = {"known": known, "new": new_dishes, "warning": warning}
-    recommend_cache.set(cache_key, payload)
+    # Do not cache transient LLM failures, otherwise a single timeout sticks for
+    # the whole TTL and tapping the same meal returns the failure without retrying.
+    if not llm_failed:
+        recommend_cache.set(cache_key, payload)
     return payload
 
 
