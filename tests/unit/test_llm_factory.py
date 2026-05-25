@@ -1,0 +1,97 @@
+import uuid
+from datetime import date
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.db.models import Base, LLMConfig, User
+from app.services.crypto import encrypt
+from app.services.llm.factory import build_llm_for_user, _is_pro, _flash_equiv
+
+
+@pytest.fixture()
+def db():
+    eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(eng)
+    s = sessionmaker(bind=eng, future=True)()
+    yield s
+    s.close()
+    eng.dispose()
+
+
+def _user(db):
+    u = User(id=uuid.uuid4(), username="u", password_hash="x")
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return u
+
+
+def test_is_pro_and_flash_equiv():
+    assert _is_pro("gemini-2.5-pro") is True
+    assert _is_pro("gemini-2.5-flash") is False
+    assert _flash_equiv("gemini-2.5-pro") == "gemini-2.5-flash"
+    assert _flash_equiv("gemini-1.5-pro") == "gemini-1.5-flash"
+    assert _flash_equiv("weird-model") == "gemini-2.5-flash"
+
+
+def test_unconfigured_uses_env_default(db):
+    from app.config import settings
+
+    # If user has no config, should use env defaults
+    u = _user(db)
+    svc = build_llm_for_user(db, u)
+    # Should match the env settings (from .env file)
+    assert svc.provider.model == settings.gemini_model
+    # If env has gemini_api_key configured, should be available
+    if settings.gemini_api_key:
+        assert svc.provider.available is True
+
+
+def test_configured_gemini_uses_config(db):
+    u = _user(db)
+    db.add(
+        LLMConfig(
+            user_id=u.id,
+            provider="gemini",
+            api_key_encrypted=encrypt("mykey"),
+            model="gemini-2.5-pro",
+        )
+    )
+    db.commit()
+    svc = build_llm_for_user(db, u)
+    assert svc.provider.model == "gemini-2.5-pro"
+
+
+def test_pro_preempt_to_flash_when_fallback_today(db):
+    u = _user(db)
+    db.add(
+        LLMConfig(
+            user_id=u.id,
+            provider="gemini",
+            api_key_encrypted=encrypt("mykey"),
+            model="gemini-2.5-pro",
+            gemini_fallback_date=date.today(),
+        )
+    )
+    db.commit()
+    svc = build_llm_for_user(db, u)
+    assert svc.provider.model == "gemini-2.5-flash"
+
+
+def test_openai_compat_config(db):
+    u = _user(db)
+    db.add(
+        LLMConfig(
+            user_id=u.id,
+            provider="openai_compat",
+            api_key_encrypted=encrypt("k"),
+            base_url="https://api.deepseek.com",
+            model="deepseek-chat",
+        )
+    )
+    db.commit()
+    svc = build_llm_for_user(db, u)
+    assert svc.provider.model == "deepseek-chat"
+    assert svc.provider.available is True
