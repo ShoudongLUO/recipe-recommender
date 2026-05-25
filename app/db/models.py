@@ -53,6 +53,7 @@ class Dish(Base):
     main_ingredients: Mapped[list] = mapped_column(JSON, default=list)
     spicy: Mapped[int] = mapped_column(Integer, default=0)
     tags: Mapped[list] = mapped_column(JSON, default=list)
+    suitable_meals: Mapped[list] = mapped_column(JSON, default=list)
     source: Mapped[str] = mapped_column(String, default="user_known")
     cook_count: Mapped[int] = mapped_column(Integer, default=0)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
