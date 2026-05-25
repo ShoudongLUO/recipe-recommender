@@ -208,3 +208,16 @@ def test_generate_new_dishes_includes_meal_label_in_prompt():
     )
     assert "早餐" in stub.prompts[0]
     assert "这一餐" in stub.prompts[0]
+
+
+def test_generate_plan_dishes_includes_count_and_known_in_prompt():
+    out = _json.dumps({"dishes": []})
+    stub = _StubProvider(out)
+    svc = LLMService(stub)
+    svc.generate_plan_dishes(
+        cuisine_prefs=["川"], spicy=2, dislikes=[],
+        known_names=["番茄炒蛋"], count=3,
+    )
+    p = stub.prompts[0]
+    assert "番茄炒蛋" in p
+    assert "3" in p

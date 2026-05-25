@@ -49,3 +49,22 @@ class LLMService:
         )
         data = parse_llm_json(self.provider.generate(prompt, temperature=0.7))
         return list(data.get("dishes", []))
+
+    def generate_plan_dishes(
+        self,
+        *,
+        cuisine_prefs,
+        spicy,
+        dislikes,
+        known_names,
+        count: int = 4,
+    ) -> list[dict]:
+        prompt = _load_prompt("plan_dishes.txt").format(
+            cuisine_prefs=", ".join(cuisine_prefs) or "(无)",
+            spicy=spicy,
+            dislikes=", ".join(dislikes) or "(无)",
+            known_names=", ".join(known_names) or "(无)",
+            count=count,
+        )
+        data = parse_llm_json(self.provider.generate(prompt, temperature=0.8))
+        return list(data.get("dishes", []))
