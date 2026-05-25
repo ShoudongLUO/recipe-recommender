@@ -27,7 +27,7 @@ class ConfigIn(BaseModel):
 
 class ModelsIn(BaseModel):
     provider: str
-    api_key: str
+    api_key: str | None = None
     base_url: str | None = None
 
 
@@ -80,9 +80,27 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: User = Depen
 
 
 @router.post("/models")
-def list_models(body: ModelsIn, user: User = Depends(current_user)) -> dict:
+def list_models(
+    body: ModelsIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    api_key = (body.api_key or "").strip()
+    base_url = body.base_url
+    # No new key supplied -> reuse the user's stored key (so listing models does
+    # not force a re-paste unless the user is actually changing the key).
+    if not api_key:
+        cfg = db.get(LLMConfig, user.id)
+        if cfg and cfg.api_key_encrypted:
+            try:
+                api_key = decrypt(cfg.api_key_encrypted)
+            except Exception:  # noqa: BLE001 - bad ciphertext (e.g. LLM_ENC_KEY rotated)
+                raise HTTPException(status_code=400, detail="保存的 key 无法读取，请重新输入")
+            base_url = base_url or cfg.base_url
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请先输入 API key")
     try:
-        provider = _build_probe_provider(body.provider, body.api_key, body.base_url)
+        provider = _build_probe_provider(body.provider, api_key, base_url)
         return {"models": provider.list_models()}
     except LLMUnavailable:
         raise HTTPException(status_code=400, detail="无法获取模型，请检查 key 或服务地址")
