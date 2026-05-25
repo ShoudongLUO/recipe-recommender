@@ -125,6 +125,16 @@ def test_edit_dish_updates_fields(authed_client, db_session, test_user):
     assert out["needs_review"] is False
 
 
+def test_edit_dish_updates_suitable_meals(authed_client, db_session, test_user):
+    d = _make_dish(db_session, test_user.id, name="粥")
+    body = {"name": "白粥", "category": "主菜", "cuisine": "家常",
+            "main_ingredients": ["大米"], "spicy": 0, "tags": [],
+            "suitable_meals": ["breakfast"]}
+    r = authed_client.put(f"/api/dishes/{d.id}", json=body)
+    assert r.status_code == 200
+    assert r.json()["suitable_meals"] == ["breakfast"]
+
+
 def test_edit_rename_to_existing_returns_409(authed_client, db_session, test_user):
     _make_dish(db_session, test_user.id, name="番茄炒蛋")
     d2 = _make_dish(db_session, test_user.id, name="红烧肉")

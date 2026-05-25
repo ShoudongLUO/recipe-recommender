@@ -114,6 +114,7 @@ class DishEdit(BaseModel):
     main_ingredients: list[str] = []
     spicy: int = 0
     tags: list[str] = []
+    suitable_meals: list[str] = []
 
 
 @router.put("/{dish_id}", response_model=DishOut)
@@ -132,6 +133,7 @@ def edit_dish(
     dish.main_ingredients = body.main_ingredients
     dish.spicy = body.spicy
     dish.tags = body.tags
+    dish.suitable_meals = body.suitable_meals
     dish.needs_review = False
     try:
         db.commit()
