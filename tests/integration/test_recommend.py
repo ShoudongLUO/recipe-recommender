@@ -89,18 +89,28 @@ def test_gemini_failure_returns_warning(authed_client, db_session, fake_transpor
     assert len(body["known"]) == 1
 
 
-def test_new_dish_filtered_when_ingredient_missing(authed_client, db_session, fake_transport, test_user):
-    _seed_ingredients(db_session, test_user.id, ["番茄"])
+def test_new_dish_missing_ingredients_annotated_or_dropped(authed_client, db_session, fake_transport, test_user):
+    """New dishes needing <=2 missing ingredients are kept with a shopping hint;
+    those needing 3+ are dropped."""
+    _seed_ingredients(db_session, test_user.id, ["番茄", "鸡蛋"])
     fake_transport.push(json.dumps({"dishes": [
-        {"name": "番茄汤", "category": "汤类", "cuisine": "家常",
-         "spicy": 0, "main_ingredients": ["番茄"], "why_recommended": "y"},
-        {"name": "牛排", "category": "西餐", "cuisine": "意式",
-         "spicy": 0, "main_ingredients": ["牛排"], "why_recommended": "y"},
+        {"name": "番茄炒蛋", "category": "主菜", "cuisine": "家常",
+         "spicy": 0, "main_ingredients": ["番茄", "鸡蛋"], "why_recommended": "y"},
+        {"name": "番茄牛肉", "category": "主菜", "cuisine": "家常",
+         "spicy": 0, "main_ingredients": ["番茄", "牛肉"], "why_recommended": "y"},
+        {"name": "佛跳墙", "category": "汤类", "cuisine": "闽",
+         "spicy": 0, "main_ingredients": ["鲍鱼", "海参", "瑶柱", "花胶"], "why_recommended": "y"},
     ]}))
     r = authed_client.post("/api/recommend", json={"meal_type": "dinner"})
-    new_names = [d["name"] for d in r.json()["new"]]
-    assert "番茄汤" in new_names
-    assert "牛排" not in new_names
+    new = {d["name"]: d for d in r.json()["new"]}
+    # fully available: kept, no missing
+    assert "番茄炒蛋" in new
+    assert new["番茄炒蛋"]["missing_ingredients"] == []
+    # one missing (牛肉): kept with shopping hint
+    assert "番茄牛肉" in new
+    assert new["番茄牛肉"]["missing_ingredients"] == ["牛肉"]
+    # four missing: dropped
+    assert "佛跳墙" not in new
 
 
 def test_cache_hit_avoids_second_gemini_call(authed_client, db_session, fake_transport, test_user):

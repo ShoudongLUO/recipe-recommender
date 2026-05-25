@@ -72,6 +72,7 @@
               <h3>{{ d.name }}</h3>
               <p>{{ d.cuisine }} · 辣度 {{ d.spicy }}</p>
               <p class="ings">{{ (d.main_ingredients || []).join('、') }}</p>
+              <p v-if="d.missing_ingredients && d.missing_ingredients.length" class="missing">还需买：{{ d.missing_ingredients.join('、') }}</p>
               <p class="why">{{ d.why_recommended }}</p>
               <button @click="logNew(d, true)">做这道并加入菜库</button>
               <button @click="logNew(d, false)">做这道（先不加入）</button>

@@ -108,12 +108,14 @@ def recommend(
         if d.cuisine:
             cuisine_hist[d.cuisine] = cuisine_hist.get(d.cuisine, 0) + 1
 
-    debug: str | None = None
+    # Allow a new dish even if it needs up to this many ingredients not yet in
+    # the pantry; surface those as a shopping hint instead of dropping the dish.
+    MAX_MISSING = 2
+
     if _today_quota(db, user.id) >= settings.daily_gemini_quota:
         warning = "今日 AI 配额已用尽，明日恢复"
     elif not gemini.available:
         warning = "新菜推荐暂不可用"
-        debug = "gemini.available=False (no GEMINI_API_KEY at runtime)"
     else:
         try:
             raw_dishes = gemini.generate_new_dishes(
@@ -125,14 +127,13 @@ def recommend(
                 cooked_this_week=cooked_names,
             )
             _bump_quota(db, user.id)
-            _filtered = []
+            pantry_set = set(pantry)
             for d in raw_dishes:
                 ings = d.get("main_ingredients", [])
-                if not can_cook_with(ings, pantry):
-                    _filtered.append(f"{d.get('name')}!ings={ings}")
-                    continue
                 if has_forbidden(d.get("cuisine"), ings, profile.dislikes):
-                    _filtered.append(f"{d.get('name')}!forbidden")
+                    continue
+                missing = [i for i in ings if i not in pantry_set]
+                if len(missing) > MAX_MISSING:
                     continue
                 new_dishes.append({
                     "name": d.get("name"),
@@ -140,17 +141,14 @@ def recommend(
                     "cuisine": d.get("cuisine"),
                     "spicy": int(d.get("spicy", 0) or 0),
                     "main_ingredients": ings,
+                    "missing_ingredients": missing,
                     "why_recommended": d.get("why_recommended", ""),
                     "source": "gemini_suggested",
                 })
-            debug = f"raw={len(raw_dishes)} kept={len(new_dishes)} filtered={_filtered}"
-        except (GeminiUnavailable, GeminiParseError) as e:
+        except (GeminiUnavailable, GeminiParseError):
             warning = "新菜推荐暂不可用"
-            debug = f"{type(e).__name__}: {str(e)[:400]}"
 
     payload = {"known": known, "new": new_dishes, "warning": warning}
-    if debug:
-        payload["_debug"] = debug
     recommend_cache.set(cache_key, payload)
     return payload
 

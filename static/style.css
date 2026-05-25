@@ -170,3 +170,5 @@ label input { display: block; width: 100%; padding: 0.4rem; }
   cursor: pointer;
   font-size: 0.9em;
 }
+
+.card .missing { color: #b45309; font-size: 0.9em; margin: 0.25rem 0; }
