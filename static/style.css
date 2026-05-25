@@ -167,3 +167,6 @@ textarea { width: 100%; min-height: 90px; padding: .6rem; border: 1px solid var(
 .profile-form label { display: block; margin: .6rem 0; font-size: 13px; color: var(--text-2); }
 .profile-form input { display: block; width: 100%; padding: .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; box-sizing: border-box; margin-top: .25rem; }
 .profile-form button { margin-top: .75rem; background: var(--btn); color: #fff; border: none; border-radius: var(--radius-sm); padding: .6rem 1.4rem; cursor: pointer; font-size: 14px; }
+
+select { width: 100%; padding: .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; background: #fff; box-sizing: border-box; margin-top: .25rem; }
+.profile-form a { color: var(--coral); }

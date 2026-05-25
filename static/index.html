@@ -40,6 +40,7 @@
         <button :class="{ active: tab==='ingredients' }" @click="go('ingredients')">本周食材</button>
         <button :class="{ active: tab==='history' }" @click="go('history')">历史</button>
         <button :class="{ active: tab==='profile' }" @click="tab='profile'">口味画像</button>
+        <button :class="{ active: tab==='settings' }" @click="go('settings')">设置</button>
       </nav>
 
       <!-- HOME -->
@@ -156,6 +157,37 @@
         <label>忌口（逗号分隔）<input v-model="profileText.dislikes" /></label>
         <button @click="saveProfile">保存</button>
         <p v-if="profileSaved" class="saved">已保存</p>
+      </section>
+
+      <!-- SETTINGS (LLM config) -->
+      <section v-if="tab==='settings'" class="profile-form">
+        <label>AI 提供商
+          <select v-model="llm.provider">
+            <option value="gemini">Gemini</option>
+            <option value="openai_compat">OpenAI 兼容（DeepSeek/OpenAI/…）</option>
+          </select>
+        </label>
+        <div v-if="llm.provider==='openai_compat'">
+          <label>服务地址 <input v-model="llm.base_url" placeholder="https://api.deepseek.com" /></label>
+          <div class="chip-row">
+            <span class="chip" @click="pickPreset('deepseek')">DeepSeek</span>
+            <span class="chip" @click="pickPreset('openai')">OpenAI</span>
+            <span class="chip" @click="pickPreset('moonshot')">Moonshot</span>
+          </div>
+        </div>
+        <label>API Key
+          <span v-if="llm.has_key && !llm.editingKey">已配置 ✓ …{{ llm.key_tail }}　<a href="#" @click.prevent="llm.editingKey=true">更换</a></span>
+          <input v-else v-model="llm.api_key" type="password" placeholder="粘贴你的 API key" />
+        </label>
+        <button class="btn btn-outline" @click="fetchModels" :disabled="llm.fetching">{{ llm.fetching ? '拉取中…' : '拉取可用模型' }}</button>
+        <p v-if="llm.modelError" class="error">{{ llm.modelError }}</p>
+        <label v-if="llm.models.length">选择模型
+          <select v-model="llm.model"><option v-for="m in llm.models" :key="m" :value="m">{{ m }}</option></select>
+        </label>
+        <label>模型（也可手填）<input v-model="llm.model" placeholder="如 gemini-2.5-pro / deepseek-chat" /></label>
+        <button class="btn btn-primary" @click="saveLlm">保存</button>
+        <p v-if="llm.usingDefault" class="hint">当前在用默认 key（管理员的 Gemini）</p>
+        <p v-if="llm.saved" class="saved">已保存</p>
       </section>
     </div>
   </div>

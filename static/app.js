@@ -45,6 +45,12 @@ createApp({
     const profileText = reactive({ cuisine: "", dislikes: "" });
     const profileSaved = ref(false);
 
+    const llm = reactive({ provider: "gemini", base_url: "", model: "", api_key: "",
+      has_key: false, key_tail: null, editingKey: false, usingDefault: true,
+      models: [], fetching: false, modelError: "", saved: false });
+    const LLM_PRESETS = { deepseek: "https://api.deepseek.com", openai: "https://api.openai.com/v1", moonshot: "https://api.moonshot.cn/v1" };
+    function pickPreset(k) { llm.base_url = LLM_PRESETS[k]; }
+
     function mealLabel(m) { return { breakfast: "早餐", lunch: "午餐", dinner: "晚餐" }[m] || m; }
     function fmtDate(iso) { try { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; } catch { return ""; } }
     function splitItems(s) { return s.split(/[,，]/).map(x => x.trim()).filter(Boolean); }
@@ -81,7 +87,35 @@ createApp({
       catch (e) { if (e.status === 401) handle401(); throw e; }
     }
 
-    function go(t) { tab.value = t; if (t === "history") loadHistory(); }
+    function go(t) { tab.value = t; if (t === "history") loadHistory(); if (t === "settings") loadLlm(); }
+
+    async function loadLlm() {
+      try {
+        const { data } = await safeApi("/api/llm-config");
+        llm.provider = data.provider || "gemini"; llm.base_url = data.base_url || "";
+        llm.model = data.model || ""; llm.has_key = data.has_key; llm.key_tail = data.key_tail;
+        llm.usingDefault = data.using_default; llm.editingKey = !data.has_key; llm.api_key = "";
+      } catch {}
+    }
+    async function fetchModels() {
+      llm.modelError = ""; llm.fetching = true;
+      try {
+        const body = { provider: llm.provider, api_key: llm.api_key || "", base_url: llm.base_url || null };
+        const { data } = await safeApi("/api/llm-config/models", { method: "POST", body });
+        llm.models = data.models || [];
+        if (!llm.model && llm.models.length) llm.model = llm.models[0];
+      } catch (e) { llm.modelError = e.detail || "无法获取模型，请检查 key 或服务地址"; }
+      finally { llm.fetching = false; }
+    }
+    async function saveLlm() {
+      const body = { provider: llm.provider, base_url: llm.base_url || null, model: llm.model || null };
+      if (llm.api_key) body.api_key = llm.api_key;
+      try {
+        await safeApi("/api/llm-config", { method: "PUT", body });
+        llm.saved = true; setTimeout(() => (llm.saved = false), 2000);
+        await loadLlm();
+      } catch (e) { llm.modelError = e.detail || e.message; }
+    }
 
     async function loadDishes() { try { const { data } = await safeApi("/api/dishes"); dishes.value = data; } catch {} }
     async function loadIngredients() { try { const { data } = await safeApi("/api/ingredients"); ingredientsText.value = (data.items || []).join(", "); } catch {} }
@@ -194,6 +228,7 @@ createApp({
       ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
       history, loadHistory,
       profile, profileText, profileSaved, saveProfile,
+      llm, pickPreset, fetchModels, saveLlm,
       recommend, logKnown, logNew, mealLabel, fmtDate,
     };
   },
