@@ -35,6 +35,7 @@ class LLMService:
         ingredients,
         cuisine_histogram,
         cooked_this_week,
+        meal_label: str = "正餐",
     ) -> list[dict]:
         prompt = _load_prompt("new_dish.txt").format(
             cuisine_prefs=", ".join(cuisine_prefs) or "(无)",
@@ -44,6 +45,7 @@ class LLMService:
             cuisine_histogram=", ".join(f"{k}:{v}" for k, v in cuisine_histogram.items())
             or "(空)",
             cooked_this_week=", ".join(cooked_this_week) or "(无)",
+            meal_label=meal_label,
         )
         data = parse_llm_json(self.provider.generate(prompt, temperature=0.7))
         return list(data.get("dishes", []))

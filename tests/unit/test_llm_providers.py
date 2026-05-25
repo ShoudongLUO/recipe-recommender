@@ -175,3 +175,20 @@ def test_service_generate_new_dishes():
         cooked_this_week=[],
     )
     assert dishes[0]["name"] == "X"
+
+
+def test_generate_new_dishes_includes_meal_label_in_prompt():
+    out = _json.dumps({"dishes": []})
+    stub = _StubProvider(out)
+    svc = LLMService(stub)
+    svc.generate_new_dishes(
+        cuisine_prefs=[],
+        spicy=2,
+        dislikes=[],
+        ingredients=["鸡蛋"],
+        cuisine_histogram={},
+        cooked_this_week=[],
+        meal_label="早餐",
+    )
+    assert "早餐" in stub.prompts[0]
+    assert "这一餐" in stub.prompts[0]
