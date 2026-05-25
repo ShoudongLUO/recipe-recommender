@@ -125,3 +125,53 @@ def test_openai_list_models():
     h.set_get({"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]})
     p = OpenAICompatProvider(api_key="k", base_url="https://api.deepseek.com", model="deepseek-chat", http=h)
     assert p.list_models() == ["deepseek-chat", "deepseek-reasoner"]
+
+
+import json as _json
+from app.services.llm.service import LLMService
+
+
+class _StubProvider:
+    available = True
+    model = "gemini-2.5-flash"
+
+    def __init__(self, out):
+        self._out = out
+        self.prompts = []
+
+    def generate(self, prompt, *, temperature=0.7):
+        self.prompts.append(prompt)
+        return self._out
+
+    def list_models(self):
+        return []
+
+
+def test_service_classify_dish():
+    out = _json.dumps(
+        {
+            "category": "主菜",
+            "cuisine": "家常",
+            "main_ingredients": ["番茄", "鸡蛋"],
+            "spicy": 0,
+            "tags": ["炒"],
+        }
+    )
+    svc = LLMService(_StubProvider(out))
+    d = svc.classify_dish("番茄炒蛋")
+    assert d["cuisine"] == "家常"
+    assert d["main_ingredients"] == ["番茄", "鸡蛋"]
+
+
+def test_service_generate_new_dishes():
+    out = _json.dumps({"dishes": [{"name": "X", "main_ingredients": ["番茄"]}]})
+    svc = LLMService(_StubProvider(out))
+    dishes = svc.generate_new_dishes(
+        cuisine_prefs=["川"],
+        spicy=2,
+        dislikes=[],
+        ingredients=["番茄"],
+        cuisine_histogram={"川": 1},
+        cooked_this_week=[],
+    )
+    assert dishes[0]["name"] == "X"
