@@ -199,3 +199,50 @@ def test_edit_dish_saves_recipe(authed_client, db_session, test_user):
     assert r.json()["recipe"] == "1. 打蛋  2. 下锅翻炒"
     g = authed_client.get("/api/dishes").json()
     assert g[0]["recipe"] == "1. 打蛋  2. 下锅翻炒"
+
+
+def test_generate_recipe_stores_and_returns(authed_client, db_session, fake_llm, test_user):
+    d = _make_dish(db_session, test_user.id, name="番茄炒蛋")
+    fake_llm.recipe_queue.append("食材：番茄2个、鸡蛋3个\n1. 炒蛋盛出\n2. 炒番茄回锅")
+    r = authed_client.post(f"/api/dishes/{d.id}/generate-recipe", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["error"] is None
+    assert "炒蛋盛出" in body["recipe"]
+    g = authed_client.get("/api/dishes").json()
+    assert "炒蛋盛出" in g[0]["recipe"]
+
+
+def test_generate_recipe_ai_failure_keeps_dish(authed_client, db_session, fake_llm, test_user):
+    from app.services.llm.base import LLMUnavailable
+    d = _make_dish(db_session, test_user.id, name="怪菜")
+    fake_llm.recipe_queue.append(LLMUnavailable("request timed out"))
+    r = authed_client.post(f"/api/dishes/{d.id}/generate-recipe", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["recipe"] == ""
+    assert "超时" in body["error"]
+
+
+def test_generate_recipe_quota_exhausted_skips_ai(authed_client, db_session, fake_llm, test_user):
+    from datetime import date
+    from app.db.models import ApiQuota
+    d = _make_dish(db_session, test_user.id, name="番茄炒蛋")
+    db_session.add(ApiQuota(user_id=test_user.id, quota_date=date.today(), count=999))
+    db_session.commit()
+    r = authed_client.post(f"/api/dishes/{d.id}/generate-recipe", json={})
+    body = r.json()
+    assert "配额" in body["error"]
+    assert fake_llm.recipe_calls == 0
+
+
+def test_generate_recipe_other_user_404(authed_client, db_session, test_user_b):
+    d = _make_dish(db_session, test_user_b.id, name="别人的菜")
+    r = authed_client.post(f"/api/dishes/{d.id}/generate-recipe", json={})
+    assert r.status_code == 404
+
+
+def test_generate_recipe_requires_auth(client, db_session, test_user):
+    d = _make_dish(db_session, test_user.id, name="x")
+    r = client.post(f"/api/dishes/{d.id}/generate-recipe", json={})
+    assert r.status_code == 401

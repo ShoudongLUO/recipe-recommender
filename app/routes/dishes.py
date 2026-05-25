@@ -8,11 +8,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.models import CookingLog, Dish, User
 from app.db.session import get_db
 from app.services.auth import current_user
 from app.services.llm.base import LLMUnavailable, LLMParseError
 from app.services.llm import factory
+from app.services.quota import bump_quota, today_quota
 
 router = APIRouter(prefix="/api/dishes", tags=["dishes"])
 
@@ -148,3 +150,38 @@ def edit_dish(
         raise HTTPException(status_code=409, detail="已有同名菜")
     db.refresh(dish)
     return _to_out(dish)
+
+
+@router.post("/{dish_id}/generate-recipe")
+def generate_recipe(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    dish = db.scalar(select(Dish).where(Dish.id == dish_id, Dish.user_id == user.id))
+    if dish is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+    if today_quota(db, user.id) >= settings.daily_gemini_quota:
+        return {"recipe": dish.recipe, "error": "今日 AI 配额已用尽，明日恢复"}
+    try:
+        text, _fell = factory.generate_recipe(
+            db, user, name=dish.name, cuisine=dish.cuisine,
+            main_ingredients=dish.main_ingredients,
+        )
+        bump_quota(db, user.id)
+        dish.recipe = text
+        db.commit()
+        return {"recipe": text, "error": None}
+    except LLMUnavailable as e:
+        msg = str(e)
+        if "timed out" in msg or "timeout" in msg.lower():
+            err = "AI 响应超时，请重试"
+        elif "decrypt" in msg:
+            err = "保存的 AI key 无法读取，请到「设置」重新输入"
+        elif "RESOURCE_EXHAUSTED" in msg or "429" in msg:
+            err = "今日 AI 额度已用尽（免费层限制），明日恢复"
+        elif "no LLM configured" in msg or "no api key" in msg:
+            err = "请先在「设置」里配置 AI"
+        else:
+            err = "做法生成失败，请重试"
+        return {"recipe": dish.recipe, "error": err}
