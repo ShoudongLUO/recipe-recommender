@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Uuid, UniqueConstraint,
+    Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, Uuid, UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -54,6 +54,7 @@ class Dish(Base):
     spicy: Mapped[int] = mapped_column(Integer, default=0)
     tags: Mapped[list] = mapped_column(JSON, default=list)
     suitable_meals: Mapped[list] = mapped_column(JSON, default=list)
+    recipe: Mapped[str] = mapped_column(Text, default="")
     source: Mapped[str] = mapped_column(String, default="user_known")
     cook_count: Mapped[int] = mapped_column(Integer, default=0)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
