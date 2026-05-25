@@ -6,7 +6,7 @@ def _seed_classify(fake_llm, ingredients=None):
     fake_llm.classify_queue.append({
         "category": "主菜", "cuisine": "家常",
         "main_ingredients": ingredients or ["番茄", "鸡蛋"],
-        "spicy": 0, "tags": ["炒"],
+        "spicy": 0, "tags": ["炒"], "suitable_meals": ["lunch", "dinner"],
     })
 
 
@@ -147,3 +147,33 @@ def test_edit_requires_auth(client, db_session, test_user):
     r = client.put(f"/api/dishes/{d.id}", json={"name": "x", "category": None,
         "cuisine": None, "main_ingredients": [], "spicy": 0, "tags": []})
     assert r.status_code == 401
+
+
+def test_add_dish_stores_suitable_meals(authed_client, fake_llm):
+    fake_llm.classify_queue.append({
+        "category": "饮品", "cuisine": "家常", "main_ingredients": ["牛奶"],
+        "spicy": 0, "tags": [], "suitable_meals": ["breakfast"],
+    })
+    r = authed_client.post("/api/dishes", json={"name": "热牛奶"})
+    assert r.status_code == 201
+    assert r.json()["suitable_meals"] == ["breakfast"]
+
+
+def test_add_dish_missing_suitable_meals_defaults_all(authed_client, fake_llm):
+    fake_llm.classify_queue.append({
+        "category": "主菜", "cuisine": "家常", "main_ingredients": ["猪肉"],
+        "spicy": 0, "tags": [],
+    })
+    r = authed_client.post("/api/dishes", json={"name": "回锅肉"})
+    assert r.status_code == 201
+    assert r.json()["suitable_meals"] == ["breakfast", "lunch", "dinner"]
+
+
+def test_add_dish_failed_classify_defaults_all_meals(authed_client, fake_llm):
+    from app.services.llm.base import LLMParseError
+    fake_llm.classify_queue.append(LLMParseError("bad"))
+    r = authed_client.post("/api/dishes", json={"name": "神秘菜"})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["needs_review"] is True
+    assert body["suitable_meals"] == ["breakfast", "lunch", "dinner"]

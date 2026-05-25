@@ -14,6 +14,8 @@ from app.services.llm import factory
 
 router = APIRouter(prefix="/api/dishes", tags=["dishes"])
 
+ALL_MEALS = ["breakfast", "lunch", "dinner"]
+
 
 class DishIn(BaseModel):
     name: str
@@ -30,6 +32,7 @@ class DishOut(BaseModel):
     source: str
     cook_count: int
     needs_review: bool
+    suitable_meals: list[str]
 
 
 def _to_out(d: Dish) -> DishOut:
@@ -37,6 +40,7 @@ def _to_out(d: Dish) -> DishOut:
         id=d.id, name=d.name, category=d.category, cuisine=d.cuisine,
         main_ingredients=d.main_ingredients, spicy=d.spicy, tags=d.tags,
         source=d.source, cook_count=d.cook_count, needs_review=d.needs_review,
+        suitable_meals=d.suitable_meals,
     )
 
 
@@ -67,6 +71,8 @@ def add_dish(
     except (LLMUnavailable, LLMParseError):
         needs_review = True
 
+    meals = ALL_MEALS if needs_review else (classified.get("suitable_meals") or ALL_MEALS)
+
     d = Dish(
         user_id=user.id,
         name=body.name,
@@ -78,6 +84,7 @@ def add_dish(
         source="user_known",
         cook_count=0,
         needs_review=needs_review,
+        suitable_meals=meals,
     )
     db.add(d)
     db.commit()
