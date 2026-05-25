@@ -187,3 +187,15 @@ def test_add_dish_failed_classify_defaults_all_meals(authed_client, fake_llm):
     body = r.json()
     assert body["needs_review"] is True
     assert body["suitable_meals"] == ["breakfast", "lunch", "dinner"]
+
+
+def test_edit_dish_saves_recipe(authed_client, db_session, test_user):
+    d = _make_dish(db_session, test_user.id, name="番茄炒蛋")
+    body = {"name": "番茄炒蛋", "category": "主菜", "cuisine": "家常",
+            "main_ingredients": ["番茄", "鸡蛋"], "spicy": 0, "tags": [],
+            "suitable_meals": ["lunch"], "recipe": "1. 打蛋  2. 下锅翻炒"}
+    r = authed_client.put(f"/api/dishes/{d.id}", json=body)
+    assert r.status_code == 200
+    assert r.json()["recipe"] == "1. 打蛋  2. 下锅翻炒"
+    g = authed_client.get("/api/dishes").json()
+    assert g[0]["recipe"] == "1. 打蛋  2. 下锅翻炒"

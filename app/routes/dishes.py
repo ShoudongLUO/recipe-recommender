@@ -35,6 +35,7 @@ class DishOut(BaseModel):
     cook_count: int
     needs_review: bool
     suitable_meals: list[str]
+    recipe: str
 
 
 def _to_out(d: Dish) -> DishOut:
@@ -43,6 +44,7 @@ def _to_out(d: Dish) -> DishOut:
         main_ingredients=d.main_ingredients, spicy=d.spicy, tags=d.tags,
         source=d.source, cook_count=d.cook_count, needs_review=d.needs_review,
         suitable_meals=d.suitable_meals,
+        recipe=d.recipe,
     )
 
 
@@ -117,6 +119,7 @@ class DishEdit(BaseModel):
     spicy: int = 0
     tags: list[str] = []
     suitable_meals: list[Literal["breakfast", "lunch", "dinner"]] = []
+    recipe: str = ""
 
 
 @router.put("/{dish_id}", response_model=DishOut)
@@ -136,6 +139,7 @@ def edit_dish(
     dish.spicy = body.spicy
     dish.tags = body.tags
     dish.suitable_meals = body.suitable_meals
+    dish.recipe = body.recipe
     dish.needs_review = False
     try:
         db.commit()
