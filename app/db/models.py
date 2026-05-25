@@ -83,3 +83,14 @@ class ApiQuota(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), primary_key=True)
     quota_date: Mapped[date] = mapped_column(Date, primary_key=True)
     count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class LLMConfig(Base):
+    __tablename__ = "llm_config"
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), primary_key=True)
+    provider: Mapped[str] = mapped_column(String, default="gemini")
+    api_key_encrypted: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    base_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    gemini_fallback_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
