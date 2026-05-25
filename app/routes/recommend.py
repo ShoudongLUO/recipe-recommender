@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import ApiQuota, CookingLog, Dish, Profile, User, WeeklyIngredients
+from app.db.models import CookingLog, Dish, Profile, User, WeeklyIngredients
 from app.db.session import get_db
 from app.services.auth import current_user
 from app.services.cache import recommend_cache
