@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
@@ -114,7 +116,7 @@ class DishEdit(BaseModel):
     main_ingredients: list[str] = []
     spicy: int = 0
     tags: list[str] = []
-    suitable_meals: list[str] = []
+    suitable_meals: list[Literal["breakfast", "lunch", "dinner"]] = []
 
 
 @router.put("/{dish_id}", response_model=DishOut)
