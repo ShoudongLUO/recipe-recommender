@@ -98,6 +98,7 @@
                   <span v-if="d.cuisine">{{ d.cuisine }}</span>
                   <span v-if="d.main_ingredients.length"> · {{ d.main_ingredients.join('、') }}</span>
                   · 做过 {{ d.cook_count }} 次
+                  · {{ mealsShort(d.suitable_meals) }}
                 </div>
               </div>
               <div class="dish-actions">
@@ -111,6 +112,10 @@
               <label>主食材（逗号分隔）<input v-model="editForm.ingredients" /></label>
               <label>辣度 0-5 <input type="number" min="0" max="5" v-model.number="editForm.spicy" /></label>
               <label>类别 <input v-model="editForm.category" /></label>
+              <label>适合餐次</label>
+              <div class="chip-row">
+                <span v-for="[val,lbl] in mealOpts" :key="val" class="chip" :class="{ on: editForm.meals.includes(val) }" @click="toggleEditMeal(val)">{{ lbl }}</span>
+              </div>
               <p v-if="editError" class="error">{{ editError }}</p>
               <div class="btn-row">
                 <button class="btn btn-primary" @click="saveEdit(d)">保存</button>

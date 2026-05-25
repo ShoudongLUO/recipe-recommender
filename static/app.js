@@ -33,7 +33,8 @@ createApp({
     const dishes = ref([]);
     const newDishName = ref(""); const addError = ref(""); const addBusy = ref(false); const addProgress = ref("");
     const editingId = ref(null);
-    const editForm = reactive({ name: "", cuisine: "", ingredients: "", spicy: 0, category: "" });
+    const editForm = reactive({ name: "", cuisine: "", ingredients: "", spicy: 0, category: "", meals: [] });
+    const mealOpts = [["breakfast", "早餐"], ["lunch", "午餐"], ["dinner", "晚餐"]];
     const editError = ref("");
 
     const ingredientsText = ref(""); const ingredientsSaved = ref(false);
@@ -52,6 +53,14 @@ createApp({
     function pickPreset(k) { llm.base_url = LLM_PRESETS[k]; }
 
     function mealLabel(m) { return { breakfast: "早餐", lunch: "午餐", dinner: "晚餐" }[m] || m; }
+    function mealsShort(arr) {
+      if (!arr || !arr.length) return "全部餐次";
+      return arr.map(m => ({ breakfast: "早", lunch: "午", dinner: "晚" }[m] || m)).join("·");
+    }
+    function toggleEditMeal(m) {
+      const i = editForm.meals.indexOf(m);
+      if (i >= 0) editForm.meals.splice(i, 1); else editForm.meals.push(m);
+    }
     function fmtDate(iso) { try { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; } catch { return ""; } }
     function splitItems(s) { return s.split(/[,，]/).map(x => x.trim()).filter(Boolean); }
 
@@ -163,6 +172,7 @@ createApp({
       editForm.name = d.name; editForm.cuisine = d.cuisine || "";
       editForm.ingredients = (d.main_ingredients || []).join(", ");
       editForm.spicy = d.spicy; editForm.category = d.category || "";
+      editForm.meals = [...(d.suitable_meals || [])];
     }
     async function saveEdit(d) {
       editError.value = "";
@@ -170,6 +180,7 @@ createApp({
         name: editForm.name.trim(), category: editForm.category.trim() || null,
         cuisine: editForm.cuisine.trim() || null, main_ingredients: splitItems(editForm.ingredients),
         spicy: Number(editForm.spicy) || 0, tags: d.tags || [],
+        suitable_meals: editForm.meals,
       };
       try { const { status } = await safeApi(`/api/dishes/${d.id}`, { method: "PUT", body });
         if (status === 409) { editError.value = "已有同名菜"; return; }
@@ -224,7 +235,7 @@ createApp({
       view, auth, authMode, authForm, authError, authBusy, submitAuth, logout,
       tab, go, loading, result,
       dishes, newDishName, addError, addBusy, addProgress, addDishes, removeDish,
-      editingId, editForm, editError, startEdit, saveEdit,
+      editingId, editForm, editError, startEdit, saveEdit, mealOpts, toggleEditMeal, mealsShort,
       ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
       history, loadHistory,
       profile, profileText, profileSaved, saveProfile,
