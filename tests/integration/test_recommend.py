@@ -26,6 +26,7 @@ def _seed_dish(db_session, user_id, **kw) -> Dish:
         source=kw.get("source", "user_known"),
         cook_count=kw.get("cook_count", 0),
         needs_review=False,
+        suitable_meals=kw.get("suitable_meals", []),
     )
     db_session.add(d)
     db_session.commit()
@@ -140,3 +141,20 @@ def test_recommend_isolation(authed_client, db_session, fake_llm, test_user, tes
 def test_no_auth_returns_401(client):
     r = client.post("/api/recommend", json={"meal_type": "lunch"})
     assert r.status_code == 401
+
+
+def test_known_dishes_filtered_by_meal(authed_client, db_session, fake_llm, test_user):
+    _seed_ingredients(db_session, test_user.id, ["大米", "鸡蛋", "猪肉"])
+    # breakfast-only dish, dinner-only dish, and an unlabeled (all-meals) dish
+    _seed_dish(db_session, test_user.id, name="白粥", main_ingredients=["大米"],
+               suitable_meals=["breakfast"])
+    _seed_dish(db_session, test_user.id, name="红烧肉", main_ingredients=["猪肉"],
+               suitable_meals=["lunch", "dinner"])
+    _seed_dish(db_session, test_user.id, name="炒蛋", main_ingredients=["鸡蛋"],
+               suitable_meals=[])  # unlabeled -> visible for all meals
+    fake_llm.new_dishes_queue.append([])
+    r = authed_client.post("/api/recommend", json={"meal_type": "breakfast"})
+    names = [d["name"] for d in r.json()["known"]]
+    assert "白粥" in names
+    assert "红烧肉" not in names   # dinner-only, hidden at breakfast
+    assert "炒蛋" in names         # empty suitable_meals = all meals

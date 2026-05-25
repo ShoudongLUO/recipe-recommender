@@ -21,6 +21,8 @@ from app.services.week import get_monday
 
 router = APIRouter(prefix="/api", tags=["recommend"])
 
+MEAL_LABELS = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"}
+
 
 class RecommendIn(BaseModel):
     meal_type: str = Field(pattern="^(breakfast|lunch|dinner)$")
@@ -92,6 +94,7 @@ def recommend(
         and d.id not in cooked_ids
         and can_cook_with(d.main_ingredients, pantry)
         and not has_forbidden(d.cuisine, d.main_ingredients, profile.dislikes)
+        and (not d.suitable_meals or body.meal_type in d.suitable_meals)
     ]
     candidates.sort(key=lambda d: score_dish(d, profile), reverse=True)
     known = [_dish_to_dict(d) for d in candidates[:2]]
@@ -116,6 +119,7 @@ def recommend(
                 db, user,
                 cuisine_prefs=profile.cuisine_prefs, spicy=profile.spicy, dislikes=profile.dislikes,
                 ingredients=pantry, cuisine_histogram=cuisine_hist, cooked_this_week=cooked_names,
+                meal_label=MEAL_LABELS[body.meal_type],
             )
             _bump_quota(db, user.id)
             pantry_set = set(pantry)
