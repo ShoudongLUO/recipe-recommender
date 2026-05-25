@@ -66,3 +66,62 @@ def test_gemini_provider_list_models():
     t = _FakeTransport()
     p = GeminiProvider(api_key="x", model="gemini-2.5-flash", transport=t)
     assert "gemini-2.5-pro" in p.list_models()
+
+
+from app.services.llm.openai_compat import OpenAICompatProvider
+
+
+class _FakeHttp:
+    def __init__(self):
+        self.posts = []
+        self.gets = []
+
+    def set_post(self, payload):
+        self._post = payload
+
+    def set_get(self, payload):
+        self._get = payload
+
+    def post(self, url, headers=None, json=None, timeout=None):
+        self.posts.append((url, json))
+        return _Resp(self._post)
+
+    def get(self, url, headers=None, timeout=None):
+        self.gets.append(url)
+        return _Resp(self._get)
+
+
+class _Resp:
+    def __init__(self, data, status=200):
+        self._data = data
+        self.status_code = status
+
+    def json(self):
+        return self._data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def test_openai_generate():
+    h = _FakeHttp()
+    h.set_post({"choices": [{"message": {"content": "hi there"}}]})
+    p = OpenAICompatProvider(api_key="k", base_url="https://api.deepseek.com", model="deepseek-chat", http=h)
+    assert p.generate("hello") == "hi there"
+    assert h.posts[0][0] == "https://api.deepseek.com/chat/completions"
+
+
+def test_openai_base_url_trailing_slash_normalized():
+    h = _FakeHttp()
+    h.set_post({"choices": [{"message": {"content": "x"}}]})
+    p = OpenAICompatProvider(api_key="k", base_url="https://api.deepseek.com/", model="m", http=h)
+    p.generate("hi")
+    assert h.posts[0][0] == "https://api.deepseek.com/chat/completions"
+
+
+def test_openai_list_models():
+    h = _FakeHttp()
+    h.set_get({"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]})
+    p = OpenAICompatProvider(api_key="k", base_url="https://api.deepseek.com", model="deepseek-chat", http=h)
+    assert p.list_models() == ["deepseek-chat", "deepseek-reasoner"]
