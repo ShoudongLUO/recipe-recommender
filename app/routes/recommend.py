@@ -108,10 +108,12 @@ def recommend(
         if d.cuisine:
             cuisine_hist[d.cuisine] = cuisine_hist.get(d.cuisine, 0) + 1
 
+    debug: str | None = None
     if _today_quota(db, user.id) >= settings.daily_gemini_quota:
         warning = "今日 AI 配额已用尽，明日恢复"
     elif not gemini.available:
         warning = "新菜推荐暂不可用"
+        debug = "gemini.available=False (no GEMINI_API_KEY at runtime)"
     else:
         try:
             raw_dishes = gemini.generate_new_dishes(
@@ -138,10 +140,13 @@ def recommend(
                     "why_recommended": d.get("why_recommended", ""),
                     "source": "gemini_suggested",
                 })
-        except (GeminiUnavailable, GeminiParseError):
+        except (GeminiUnavailable, GeminiParseError) as e:
             warning = "新菜推荐暂不可用"
+            debug = f"{type(e).__name__}: {str(e)[:400]}"
 
     payload = {"known": known, "new": new_dishes, "warning": warning}
+    if debug:
+        payload["_debug"] = debug
     recommend_cache.set(cache_key, payload)
     return payload
 
