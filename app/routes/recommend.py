@@ -142,6 +142,8 @@ def recommend(
             msg = str(e)
             if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
                 warning = "今日 AI 额度已用尽（免费层限制），明日恢复"
+            elif "decrypt" in msg:
+                warning = "保存的 AI key 无法读取（可能因为加密密钥已更换），请到「设置」重新输入"
             elif "no LLM configured" in msg or "no api key" in msg:
                 warning = "请先在「设置」里配置 AI（或暂无可用 key）"
             else:

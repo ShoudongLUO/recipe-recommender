@@ -158,3 +158,20 @@ def test_known_dishes_filtered_by_meal(authed_client, db_session, fake_llm, test
     assert "白粥" in names
     assert "红烧肉" not in names   # dinner-only, hidden at breakfast
     assert "炒蛋" in names         # empty suitable_meals = all meals
+
+
+def test_recommend_decrypt_failure_shows_clear_warning(authed_client, db_session, test_user):
+    """A stored key that can't be decrypted (LLM_ENC_KEY rotated) must show a
+    re-enter-key warning, NOT a misleading quota-exhausted message."""
+    from app.db.models import LLMConfig
+    _seed_ingredients(db_session, test_user.id, ["番茄", "鸡蛋"])
+    _seed_dish(db_session, test_user.id, name="番茄炒蛋", main_ingredients=["番茄", "鸡蛋"])
+    db_session.add(LLMConfig(
+        user_id=test_user.id, provider="gemini",
+        api_key_encrypted="not-a-valid-fernet-token", model="gemini-2.5-pro"))
+    db_session.commit()
+    r = authed_client.post("/api/recommend", json={"meal_type": "lunch"})
+    body = r.json()
+    assert body["new"] == []
+    assert "重新输入" in body["warning"]
+    assert "额度" not in body["warning"]

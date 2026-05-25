@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.models import Base, LLMConfig, User
 from app.services.crypto import encrypt
+from app.services.llm.base import LLMUnavailable
 from app.services.llm.factory import build_llm_for_user, _is_pro, _flash_equiv
 
 
@@ -78,6 +79,27 @@ def test_pro_preempt_to_flash_when_fallback_today(db):
     db.commit()
     svc = build_llm_for_user(db, u)
     assert svc.provider.model == "gemini-2.5-flash"
+
+
+def test_undecryptable_key_does_not_fallback_to_default(db):
+    """A stored key that cannot be decrypted (e.g. LLM_ENC_KEY was rotated) must
+    NOT silently fall back to the default admin key — it should surface a clear
+    decrypt error instead."""
+    u = _user(db)
+    db.add(
+        LLMConfig(
+            user_id=u.id,
+            provider="gemini",
+            api_key_encrypted="this-is-not-a-valid-fernet-token",
+            model="gemini-2.5-pro",
+        )
+    )
+    db.commit()
+    svc = build_llm_for_user(db, u)
+    assert svc.provider.available is False
+    with pytest.raises(LLMUnavailable) as e:
+        svc.provider.generate("hi")
+    assert "decrypt" in str(e.value).lower()
 
 
 def test_openai_compat_config(db):

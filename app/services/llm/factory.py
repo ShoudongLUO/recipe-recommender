@@ -27,18 +27,21 @@ class _UnavailableProvider:
     available = False
     model = ""
 
+    def __init__(self, reason: str = "no LLM configured"):
+        self._reason = reason
+
     def generate(self, prompt: str, *, temperature: float = 0.7) -> str:
-        raise LLMUnavailable("no LLM configured")
+        raise LLMUnavailable(self._reason)
 
     def list_models(self) -> list[str]:
-        raise LLMUnavailable("no LLM configured")
+        raise LLMUnavailable(self._reason)
 
 
 def _build_provider(cfg: LLMConfig | None, *, force_flash: bool = False):
     if cfg and cfg.api_key_encrypted:
         try:
             key = decrypt(cfg.api_key_encrypted)
-        except Exception:  # noqa: BLE001 - bad ciphertext -> treat as unconfigured
+        except Exception:  # noqa: BLE001 - bad ciphertext (e.g. LLM_ENC_KEY rotated)
             key = None
         if key:
             if cfg.provider == "openai_compat":
@@ -47,6 +50,9 @@ def _build_provider(cfg: LLMConfig | None, *, force_flash: bool = False):
             if force_flash or (_is_pro(model) and cfg.gemini_fallback_date == date.today()):
                 model = _flash_equiv(model)
             return GeminiProvider(key, model)
+        # A key is stored but cannot be decrypted. Do NOT silently fall back to
+        # the default key — that masks the real problem as a quota error.
+        return _UnavailableProvider("saved API key could not be decrypted")
     if settings.gemini_api_key:
         model = settings.gemini_model
         if force_flash:
