@@ -70,3 +70,45 @@ def test_list_dishes_isolation(authed_client, fake_transport, test_user, test_us
 def test_no_auth_returns_401(client):
     r = client.get("/api/dishes")
     assert r.status_code == 401
+
+
+def _make_dish(db_session, user_id, name="红烧肉"):
+    from app.db.models import Dish
+    d = Dish(user_id=user_id, name=name, main_ingredients=["五花肉"], source="user_known", cook_count=0)
+    db_session.add(d)
+    db_session.commit()
+    db_session.refresh(d)
+    return d
+
+
+def test_delete_dish_removes_dish_and_logs(authed_client, db_session, test_user):
+    from app.db.models import CookingLog, Dish
+    d = _make_dish(db_session, test_user.id)
+    db_session.add(CookingLog(user_id=test_user.id, dish_id=d.id, meal_type="lunch"))
+    db_session.commit()
+    r = authed_client.delete(f"/api/dishes/{d.id}")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    db_session.expire_all()
+    assert db_session.get(Dish, d.id) is None
+    assert db_session.query(CookingLog).filter_by(dish_id=d.id).count() == 0
+
+
+def test_delete_nonexistent_returns_404(authed_client):
+    r = authed_client.delete("/api/dishes/99999")
+    assert r.status_code == 404
+
+
+def test_delete_other_users_dish_returns_404(authed_client, db_session, test_user_b):
+    from app.db.models import Dish
+    d = _make_dish(db_session, test_user_b.id, name="别人的菜")
+    r = authed_client.delete(f"/api/dishes/{d.id}")
+    assert r.status_code == 404
+    db_session.expire_all()
+    assert db_session.get(Dish, d.id) is not None
+
+
+def test_delete_requires_auth(client, db_session, test_user):
+    d = _make_dish(db_session, test_user.id)
+    r = client.delete(f"/api/dishes/{d.id}")
+    assert r.status_code == 401

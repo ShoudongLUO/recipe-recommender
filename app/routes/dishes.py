@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Dish, User
+from app.db.models import CookingLog, Dish, User
 from app.db.session import get_db
 from app.services.auth import current_user
 from app.services.gemini import GeminiClient, GeminiParseError, GeminiUnavailable
@@ -86,3 +86,18 @@ def add_dish(
     db.commit()
     db.refresh(d)
     return _to_out(d)
+
+
+@router.delete("/{dish_id}")
+def delete_dish(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    dish = db.scalar(select(Dish).where(Dish.id == dish_id, Dish.user_id == user.id))
+    if dish is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+    db.execute(delete(CookingLog).where(CookingLog.dish_id == dish_id, CookingLog.user_id == user.id))
+    db.delete(dish)
+    db.commit()
+    return {"ok": True}
