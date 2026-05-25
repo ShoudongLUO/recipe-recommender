@@ -112,3 +112,41 @@ def test_delete_requires_auth(client, db_session, test_user):
     d = _make_dish(db_session, test_user.id)
     r = client.delete(f"/api/dishes/{d.id}")
     assert r.status_code == 401
+
+
+def test_edit_dish_updates_fields(authed_client, db_session, test_user):
+    d = _make_dish(db_session, test_user.id, name="红烧肉")
+    body = {"name": "红烧排骨", "category": "主菜", "cuisine": "苏",
+            "main_ingredients": ["排骨", "冰糖"], "spicy": 2, "tags": ["炖"]}
+    r = authed_client.put(f"/api/dishes/{d.id}", json=body)
+    assert r.status_code == 200
+    out = r.json()
+    assert out["name"] == "红烧排骨"
+    assert out["cuisine"] == "苏"
+    assert out["main_ingredients"] == ["排骨", "冰糖"]
+    assert out["spicy"] == 2
+    assert out["needs_review"] is False
+
+
+def test_edit_rename_to_existing_returns_409(authed_client, db_session, test_user):
+    _make_dish(db_session, test_user.id, name="番茄炒蛋")
+    d2 = _make_dish(db_session, test_user.id, name="红烧肉")
+    body = {"name": "番茄炒蛋", "category": None, "cuisine": None,
+            "main_ingredients": [], "spicy": 0, "tags": []}
+    r = authed_client.put(f"/api/dishes/{d2.id}", json=body)
+    assert r.status_code == 409
+
+
+def test_edit_other_users_dish_returns_404(authed_client, db_session, test_user_b):
+    d = _make_dish(db_session, test_user_b.id, name="别人的菜")
+    body = {"name": "改名", "category": None, "cuisine": None,
+            "main_ingredients": [], "spicy": 0, "tags": []}
+    r = authed_client.put(f"/api/dishes/{d.id}", json=body)
+    assert r.status_code == 404
+
+
+def test_edit_requires_auth(client, db_session, test_user):
+    d = _make_dish(db_session, test_user.id)
+    r = client.put(f"/api/dishes/{d.id}", json={"name": "x", "category": None,
+        "cuisine": None, "main_ingredients": [], "spicy": 0, "tags": []})
+    assert r.status_code == 401

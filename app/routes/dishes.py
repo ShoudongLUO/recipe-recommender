@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import CookingLog, Dish, User
@@ -101,3 +102,38 @@ def delete_dish(
     db.delete(dish)
     db.commit()
     return {"ok": True}
+
+
+class DishEdit(BaseModel):
+    name: str
+    category: str | None = None
+    cuisine: str | None = None
+    main_ingredients: list[str] = []
+    spicy: int = 0
+    tags: list[str] = []
+
+
+@router.put("/{dish_id}", response_model=DishOut)
+def edit_dish(
+    dish_id: int,
+    body: DishEdit,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    dish = db.scalar(select(Dish).where(Dish.id == dish_id, Dish.user_id == user.id))
+    if dish is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+    dish.name = body.name
+    dish.category = body.category
+    dish.cuisine = body.cuisine
+    dish.main_ingredients = body.main_ingredients
+    dish.spicy = body.spicy
+    dish.tags = body.tags
+    dish.needs_review = False
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="已有同名菜")
+    db.refresh(dish)
+    return _to_out(dish)
