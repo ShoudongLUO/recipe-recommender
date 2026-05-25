@@ -7,8 +7,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 
+def _normalize_url(url: str) -> str:
+    # Neon/Vercel inject "postgresql://..."; SQLAlchemy would pick the (uninstalled)
+    # psycopg2 driver. Force the psycopg (v3) driver, which is what we depend on.
+    if url.startswith("postgresql+"):
+        return url
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    return url
+
+
 def make_engine(url: str | None = None):
-    url = url or os.getenv("DATABASE_URL", "sqlite:///./data.db")
+    url = _normalize_url(url or os.getenv("DATABASE_URL", "sqlite:///./data.db"))
     connect_args = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
