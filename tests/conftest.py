@@ -22,6 +22,8 @@ class FakeLLM:
         self.classify_queue = []     # dicts or Exceptions
         self.new_dishes_queue = []   # lists or Exceptions
         self.new_calls = 0
+        self.plan_queue = []     # lists or Exceptions
+        self.plan_calls = 0
 
     def classify(self, name):
         r = self.classify_queue.pop(0)
@@ -32,6 +34,13 @@ class FakeLLM:
     def new_dishes(self):
         self.new_calls += 1
         r = self.new_dishes_queue.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    def plan_dishes(self):
+        self.plan_calls += 1
+        r = self.plan_queue.pop(0)
         if isinstance(r, Exception):
             raise r
         return r
@@ -47,8 +56,12 @@ def fake_llm(monkeypatch):
     def _recommend(db, user, **kwargs):
         return f.new_dishes(), False
 
+    def _plan(db, user, **kwargs):
+        return f.plan_dishes(), False
+
     monkeypatch.setattr(_llm_factory, "classify_with_fallback", _classify)
     monkeypatch.setattr(_llm_factory, "recommend_new_dishes", _recommend)
+    monkeypatch.setattr(_llm_factory, "plan_new_dishes", _plan)
     return f
 
 
