@@ -237,7 +237,7 @@ createApp({
         ingredientsText.value = merged.join(", ");
         planning.open = false;
         ingredientsSaved.value = true; setTimeout(() => (ingredientsSaved.value = false), 2000);
-      } catch {}
+      } catch (e) { planning.aiWarning = e.detail || "保存失败，请重试"; }
     }
 
     async function saveProfile() {
