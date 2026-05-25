@@ -90,7 +90,11 @@ createApp({
         const body = authMode.value === "login"
           ? { username: authForm.username, password: authForm.password }
           : { username: authForm.username, password: authForm.password, invite_code: authForm.invite_code };
-        const { data } = await api(url, { method: "POST", body });
+        const { status, data } = await api(url, { method: "POST", body });
+        if (status !== 200 || !data || !data.token) {
+          authError.value = (data && data.detail) || "注册或登录失败";
+          return;
+        }
         setLoggedIn(data.token, data.username);
       } catch (e) {
         if (e.status === 401) {
