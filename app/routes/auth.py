@@ -31,22 +31,26 @@ class TokenOut(BaseModel):
 def register(body: RegisterIn, db: Session = Depends(get_db)):
     user_id = uuid4()
 
-    # Insert user + profile first so the FK target for invite_codes.used_by_user_id
-    # exists before we reference it (Postgres enforces FKs; ordering matters).
+    # Insert the user FIRST and flush it alone, so the row physically exists
+    # before anything references users.id. (Postgres enforces FKs; relying on
+    # SQLAlchemy to order a combined user+profile flush is not reliable when the
+    # FK column is also the child's primary key.)
     user = User(
         id=user_id,
         username=body.username,
         password_hash=hash_password(body.password),
     )
     db.add(user)
-    db.add(Profile(user_id=user_id, cuisine_prefs=[], spicy=2, dislikes=[]))
     try:
         db.flush()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="用户名已存在")
 
-    # Atomically consume invite code now that the user row exists
+    # user row now exists -> safe to create rows that reference it
+    db.add(Profile(user_id=user_id, cuisine_prefs=[], spicy=2, dislikes=[]))
+
+    # Atomically consume invite code
     stmt = (
         update(InviteCode)
         .where(InviteCode.code == body.invite_code, InviteCode.used_at.is_(None))
