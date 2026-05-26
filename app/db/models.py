@@ -68,6 +68,8 @@ class WeeklyIngredients(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
     week_start: Mapped[date] = mapped_column(Date, nullable=False)
     items: Mapped[list] = mapped_column(JSON, default=list)
+    quantities: Mapped[dict] = mapped_column(JSON, default=dict)
+    used_up: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
