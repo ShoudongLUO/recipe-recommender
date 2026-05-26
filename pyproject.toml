@@ -21,10 +21,16 @@ dev = [
   "pytest-asyncio>=0.23",
   "pytest-cov>=4.1",
 ]
+e2e = [
+  "pytest-playwright>=0.4",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+# Default run = fast unit + integration. The browser smoke tests under tests/e2e
+# are opt-in (need `playwright install chromium` + spin up a live server) and are
+# run explicitly: `pytest tests/e2e`.
+testpaths = ["tests/unit", "tests/integration"]
 addopts = "-v --strict-markers"
 
 [tool.coverage.run]
