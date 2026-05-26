@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import CookingLog, Dish, Profile, User, WeeklyIngredients
+from app.db.models import CookingLog, Dish, Profile, User
 from app.db.session import get_db
 from app.services.auth import current_user
 from app.services.cache import recommend_cache
@@ -18,6 +18,7 @@ from app.services.llm.base import LLMUnavailable, LLMParseError
 from app.services.llm import factory
 from app.services.quota import bump_quota, today_quota
 from app.services.scoring import score_dish
+from app.services.pantry import ensure_current_week
 from app.services.week import get_monday
 
 router = APIRouter(prefix="/api", tags=["recommend"])
@@ -45,12 +46,7 @@ def recommend(
 ) -> dict[str, Any]:
     profile = db.get(Profile, user.id)
     ws = get_monday(date.today())
-    week = db.scalar(
-        select(WeeklyIngredients).where(
-            WeeklyIngredients.user_id == user.id,
-            WeeklyIngredients.week_start == ws,
-        )
-    )
+    week = ensure_current_week(db, user)
     if week is None or not week.items:
         return {"error": "INGREDIENTS_EMPTY"}
 
@@ -71,7 +67,10 @@ def recommend(
     if cached is not None:
         return cached
 
-    pantry = week.items
+    used = set(week.used_up or [])
+    pantry = [n for n in week.items if n not in used]
+    if not pantry:
+        return {"error": "INGREDIENTS_EMPTY"}
     candidates = [
         d for d in all_dishes
         if d.source == "user_known"

@@ -192,3 +192,19 @@ def test_recommend_decrypt_failure_shows_clear_warning(authed_client, db_session
     assert body["new"] == []
     assert "重新输入" in body["warning"]
     assert "额度" not in body["warning"]
+
+
+def test_recommend_excludes_used_up_ingredients(authed_client, db_session, fake_llm, test_user):
+    from app.db.models import WeeklyIngredients
+    from app.services.week import get_monday
+    db_session.add(WeeklyIngredients(
+        user_id=test_user.id, week_start=get_monday(date.today()),
+        items=["番茄", "鸡蛋"], quantities={}, used_up=["鸡蛋"]))
+    db_session.commit()
+    _seed_dish(db_session, test_user.id, name="番茄炒蛋", main_ingredients=["番茄", "鸡蛋"])
+    _seed_dish(db_session, test_user.id, name="凉拌番茄", main_ingredients=["番茄"])
+    fake_llm.new_dishes_queue.append([])
+    r = authed_client.post("/api/recommend", json={"meal_type": "lunch"})
+    names = [d["name"] for d in r.json()["known"]]
+    assert "番茄炒蛋" not in names   # 鸡蛋 used up -> cannot cook
+    assert "凉拌番茄" in names
