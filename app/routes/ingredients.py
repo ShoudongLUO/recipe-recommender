@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import User, WeeklyIngredients
 from app.db.session import get_db
 from app.services.auth import current_user
+from app.services.cache import recommend_cache
 from app.services.pantry import ensure_current_week
 from app.services.week import get_monday
 
@@ -68,4 +69,6 @@ def put_ingredients(
         row.used_up = used_up
         row.updated_at = datetime.utcnow()
     db.commit()
+    # Pantry changed (items/used_up) -> drop stale cached recommendations for this user.
+    recommend_cache.invalidate_prefix(f"{user.id}:")
     return IngredientsOut(week_start=ws, items=body.items, quantities=quantities, used_up=used_up)

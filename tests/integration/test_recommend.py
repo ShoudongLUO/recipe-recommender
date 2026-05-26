@@ -208,3 +208,18 @@ def test_recommend_excludes_used_up_ingredients(authed_client, db_session, fake_
     names = [d["name"] for d in r.json()["known"]]
     assert "番茄炒蛋" not in names   # 鸡蛋 used up -> cannot cook
     assert "凉拌番茄" in names
+
+
+def test_marking_used_up_invalidates_recommend_cache(authed_client, db_session, fake_llm, test_user):
+    """Saving ingredients (e.g. marking one used-up) must drop the cached
+    recommendation so the next call reflects the change within the TTL window."""
+    authed_client.put("/api/ingredients", json={"items": ["番茄", "鸡蛋"], "quantities": {}, "used_up": []})
+    _seed_dish(db_session, test_user.id, name="番茄炒蛋", main_ingredients=["番茄", "鸡蛋"])
+    fake_llm.new_dishes_queue.append([])
+    r1 = authed_client.post("/api/recommend", json={"meal_type": "lunch"})
+    assert "番茄炒蛋" in [d["name"] for d in r1.json()["known"]]
+    # mark 鸡蛋 used up -> should invalidate the cached lunch recommendation
+    authed_client.put("/api/ingredients", json={"items": ["番茄", "鸡蛋"], "quantities": {}, "used_up": ["鸡蛋"]})
+    fake_llm.new_dishes_queue.append([])
+    r2 = authed_client.post("/api/recommend", json={"meal_type": "lunch"})
+    assert "番茄炒蛋" not in [d["name"] for d in r2.json()["known"]]

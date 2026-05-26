@@ -22,5 +22,9 @@ class TTLCache:
             return None
         return value
 
+    def invalidate_prefix(self, prefix: str) -> None:
+        for k in [k for k in self._store if k.startswith(prefix)]:
+            self._store.pop(k, None)
+
 
 recommend_cache = TTLCache(ttl_seconds=30)
