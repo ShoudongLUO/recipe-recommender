@@ -326,7 +326,7 @@ createApp({
       recipeViewId, toggleRecipeView, genEditRecipe,
       recipeModal, fetchRecipe, openRecipeModal, closeRecipeModal,
       ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
-      quantities, usedUp, setQty, isUsedUp, toggleUsedUp,
+      currentIngredients, quantities, usedUp, setQty, isUsedUp, toggleUsedUp,
       planning, openPlanner, togglePlanPick, shoppingList, addPlanToIngredients,
       history, loadHistory,
       profile, profileText, profileSaved, saveProfile,
