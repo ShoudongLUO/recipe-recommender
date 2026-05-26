@@ -176,3 +176,13 @@ select { width: 100%; padding: .5rem; border: 1px solid var(--border); border-ra
 .modal { background: var(--surface); border-radius: var(--radius); padding: 1.1rem 1.2rem; max-width: 420px; width: 100%; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-float); }
 .modal-close { float: right; cursor: pointer; color: var(--text-3); font-size: 20px; line-height: 1; }
 .recipe-text { white-space: pre-wrap; font-size: 13px; color: var(--text-2); line-height: 1.7; margin: .3rem 0; }
+
+/* === Quantity table === */
+.qty-table { margin: .5rem 0 1rem; }
+.qty-row { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; border-bottom: 1px solid var(--border); }
+.qty-row:last-child { border-bottom: none; }
+.qty-row.used .qty-name { color: var(--text-3); text-decoration: line-through; }
+.qty-name { flex: 0 0 5.5rem; font-size: 13px; }
+.qty-input { flex: 1; padding: .35rem .5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; min-width: 0; }
+.qty-flag { flex: 0 0 auto; font-size: 11px; color: var(--text-2); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: .2rem .6rem; cursor: pointer; user-select: none; }
+.qty-flag.on { background: var(--coral); color: #fff; border-color: var(--coral); }

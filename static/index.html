@@ -163,6 +163,14 @@
           <span v-for="ing in commonIngredients" :key="ing" class="chip" :class="{ on: hasIngredient(ing) }" @click="toggleChip(ing)">{{ ing }}</span>
         </div>
         <textarea v-model="ingredientsText" placeholder="逗号分隔，如：番茄, 鸡蛋, 猪肉, 青菜"></textarea>
+        <div v-if="currentIngredients().length" class="qty-table">
+          <div class="section-head"><span class="dot sage"></span>份量（用完点「已用完」，下周不再带上）</div>
+          <div v-for="name in currentIngredients()" :key="name" class="qty-row" :class="{ used: isUsedUp(name) }">
+            <span class="qty-name">{{ name }}</span>
+            <input class="qty-input" :value="quantities[name] || ''" @input="setQty(name, $event.target.value)" placeholder="份量，如 2个/一把/500g" />
+            <span class="qty-flag" :class="{ on: isUsedUp(name) }" @click="toggleUsedUp(name)">已用完</span>
+          </div>
+        </div>
         <div><button class="btn btn-primary" style="margin-top:.6rem" @click="saveIngredients">保存本周食材</button></div>
         <p v-if="ingredientsSaved" class="saved">已保存</p>
       </section>

@@ -41,6 +41,8 @@ createApp({
 
     const ingredientsText = ref(""); const ingredientsSaved = ref(false);
     const commonIngredients = COMMON_INGREDIENTS;
+    const quantities = reactive({});   // { name: 份量文本 }
+    const usedUp = ref([]);            // [已用完的 name]
 
     const planning = reactive({ open: false, loading: false, candidates: [], selected: [], aiWarning: "" });
 
@@ -131,7 +133,15 @@ createApp({
     }
 
     async function loadDishes() { try { const { data } = await safeApi("/api/dishes"); dishes.value = data; } catch {} }
-    async function loadIngredients() { try { const { data } = await safeApi("/api/ingredients"); ingredientsText.value = (data.items || []).join(", "); } catch {} }
+    async function loadIngredients() {
+      try {
+        const { data } = await safeApi("/api/ingredients");
+        ingredientsText.value = (data.items || []).join(", ");
+        Object.keys(quantities).forEach(k => delete quantities[k]);
+        Object.assign(quantities, data.quantities || {});
+        usedUp.value = data.used_up || [];
+      } catch {}
+    }
     async function loadProfile() {
       try {
         const { data } = await safeApi("/api/profile");
@@ -210,9 +220,19 @@ createApp({
       if (idx >= 0) items.splice(idx, 1); else items.push(ing);
       ingredientsText.value = items.join(", ");
     }
+    function setQty(name, val) { quantities[name] = val; }
+    function isUsedUp(name) { return usedUp.value.includes(name); }
+    function toggleUsedUp(name) {
+      const i = usedUp.value.indexOf(name);
+      if (i >= 0) usedUp.value.splice(i, 1); else usedUp.value.push(name);
+    }
     async function saveIngredients() {
       const items = currentIngredients();
-      try { await safeApi("/api/ingredients", { method: "PUT", body: { items } });
+      const itemSet = new Set(items);
+      const qty = {}; for (const n of items) if (quantities[n]) qty[n] = quantities[n];
+      const used = usedUp.value.filter(n => itemSet.has(n));
+      try { await safeApi("/api/ingredients", { method: "PUT", body: { items, quantities: qty, used_up: used } });
+        usedUp.value = used;
         ingredientsSaved.value = true; setTimeout(() => (ingredientsSaved.value = false), 2000);
       } catch {}
     }
@@ -306,6 +326,7 @@ createApp({
       recipeViewId, toggleRecipeView, genEditRecipe,
       recipeModal, fetchRecipe, openRecipeModal, closeRecipeModal,
       ingredientsText, ingredientsSaved, saveIngredients, commonIngredients, hasIngredient, toggleChip,
+      quantities, usedUp, setQty, isUsedUp, toggleUsedUp,
       planning, openPlanner, togglePlanPick, shoppingList, addPlanToIngredients,
       history, loadHistory,
       profile, profileText, profileSaved, saveProfile,
